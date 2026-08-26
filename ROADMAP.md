@@ -581,7 +581,12 @@ enthusiastic afternoon and discovering the cost in chapter two.
   the duality actually fixes — the same "one log, many consumers" the capacity page starts
   recommending at two derived systems). Nine new diagrams, all passing `check:diagrams`.
   Chapter numbers now say **DDIA 1st edition** everywhere they appear, since the 2nd
-  edition renumbers.
+  edition renumbers. Ch 11 later gained a second companion, **Backpressure** (drop /
+  buffer / slow-the-sender as the only three exits; credit as the one mechanism under
+  TCP's window, prefetch, permits and `request(n)`; the Chiu–Jain phase plane for why
+  AIMD wins; and the pressure chain that ends with `send()` blocking the checkout API) —
+  it exists because the Kafka papers chapter judges bare push and never says what the
+  push camp built instead, and both deep-dives now point up at it.
 - **Component deep-dives** — flagship, 9-chapter treatment per infra component.
   - ✅ Kafka (flagship template: abstraction → anatomy w/ animated traces → hardware
     envelope → scale up/out → ops runbook + failure cascade → large-cluster reference → papers)

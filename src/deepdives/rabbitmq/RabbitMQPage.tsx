@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import SiteNav from '../../components/SiteNav'
 import SiteFooter from '../../components/SiteFooter'
+import IdeaStrip from '../../components/IdeaStrip'
 import TracePlayer from '../../components/TracePlayer'
 import MetricRunbook from '../../components/MetricRunbook'
 import { Sandbox } from '../ModulePanel'
@@ -84,6 +85,13 @@ export default function RabbitMQPage() {
             you&apos;d want it explained: <b>what the broker actually does with one message</b>,
             what hardware it consumes, and only then how it scales.
           </p>
+
+          <IdeaStrip
+            ideas={[
+              { slug: 'backpressure', label: 'Backpressure' },
+              { slug: 'stream-table', label: 'Stream–Table Duality' },
+            ]}
+          />
 
           <Ch id="abstraction" n={1} title="The core abstraction: the smart broker">
             <p>

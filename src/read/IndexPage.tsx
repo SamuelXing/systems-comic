@@ -15,6 +15,7 @@ import {
   ShuffleDiagram,
   DualityDiagram,
   CompoundKeyDiagram,
+  CreditLoopDiagram,
 } from './diagrams'
 
 
@@ -33,6 +34,7 @@ export const PANEL: Record<string, ReactNode> = {
   consensus: <RaftDiagram />,
   shuffle: <ShuffleDiagram />,
   'stream-table': <DualityDiagram />,
+  backpressure: <CreditLoopDiagram />,
 }
 
 interface Idea {
@@ -81,6 +83,7 @@ export const PARTS: Part[] = [
     ideas: [
       { no: 'Ch 10', title: 'The Shuffle', hook: 'The sort in the middle — and why one hot key makes the cluster stop mattering.', slug: 'shuffle' },
       { no: 'Ch 11', title: 'Stream–Table Duality', hook: 'A table is a cached answer; the log is the thing that is true.', slug: 'stream-table' },
+      { no: 'Ch 11', title: 'Backpressure', hook: 'The producer is faster. Drop, buffer, or slow the sender — there is no fourth option.', slug: 'backpressure' },
     ],
   },
 ]

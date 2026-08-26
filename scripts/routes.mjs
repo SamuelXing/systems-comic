@@ -81,6 +81,10 @@ export const ROUTES = {
     title: 'Stream–Table Duality',
     desc: 'A table is what is true now; a log is everything that happened. A log is not a queue, and that is the entire trick.',
   },
+  '/ddia/read/backpressure': {
+    title: 'Backpressure',
+    desc: 'The producer outruns the consumer: drop, buffer, or slow the sender — no fourth option. The window arithmetic behind TCP, prefetch and consumer lag, and the 1989 geometry that says why AIMD wins.',
+  },
 
   /* Book B — the papers storybook. Chapter entries are duplicated from the
      chapter files, same deal as the comics: previews need them, and a test
