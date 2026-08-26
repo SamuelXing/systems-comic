@@ -581,7 +581,10 @@ enthusiastic afternoon and discovering the cost in chapter two.
   the duality actually fixes — the same "one log, many consumers" the capacity page starts
   recommending at two derived systems). Nine new diagrams, all passing `check:diagrams`.
   Chapter numbers now say **DDIA 1st edition** everywhere they appear, since the 2nd
-  edition renumbers. Ch 11 later gained a second companion, **Backpressure** (drop /
+  edition renumbers. The book later opened an **extension shelf** — Part IV,
+  "where the book points": chapters that start where the text stops, kept off
+  Parts I–III so nobody mistakes them for Kleppmann's outline. Its first entry
+  is **Backpressure** (drop /
   buffer / slow-the-sender as the only three exits; credit as the one mechanism under
   TCP's window, prefetch, permits and `request(n)`; the Chiu–Jain phase plane for why
   AIMD wins; and the pressure chain that ends with `send()` blocking the checkout API) —

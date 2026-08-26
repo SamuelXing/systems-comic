@@ -3,13 +3,13 @@ import { FlowForkDiagram, DelayCurveDiagram, CreditLoopDiagram, ChiuJainDiagram 
 
 export const backpressure: Comic = {
   slug: 'backpressure',
-  chapter: 'Chapter 11 · Stream Processing',
-  chapterNo: 'Ch 11',
+  chapter: 'Extension · Flow Control',
+  chapterNo: 'Ext 1',
   title: 'Backpressure',
   dek: 'A producer that outruns its consumer leaves a system three exits: throw work away, pile it up, or make the sender slow down. Everything with a queue in it — TCP, RabbitMQ, Kafka, Flink — is an arrangement of those three, and the arrangement has mathematics.',
   minutes: 7,
   caption:
-    'Between every producer and consumer sits a buffer, and the buffer obeys one line of arithmetic: it grows by exactly **arrivals minus departures**. While the consumer keeps up, the buffer sits empty and nobody thinks about it. The day the producer gets faster — for a burst, or for good — the system has to answer a question it was hoping to avoid: **who gets hurt?** The sender, the reader, or the data. A surprising number of production outages are a system discovering which answer it had picked by default.',
+    'Between every producer and consumer sits a buffer, and the buffer obeys one line of arithmetic: it grows by exactly **arrivals minus departures**. While the consumer keeps up, the buffer sits empty and nobody thinks about it. The day the producer gets faster — for a burst, or for good — the system has to answer a question it was hoping to avoid: **who gets hurt?** The sender, the reader, or the data. *DDIA raises exactly this on the first page of Chapter 11 — three options, a nod at TCP — and moves on. This chapter is an extension: it follows the nod the rest of the way down.*',
   steps: [
     {
       n: 'Step 01',

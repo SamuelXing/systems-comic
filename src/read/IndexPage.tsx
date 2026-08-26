@@ -83,7 +83,20 @@ export const PARTS: Part[] = [
     ideas: [
       { no: 'Ch 10', title: 'The Shuffle', hook: 'The sort in the middle — and why one hot key makes the cluster stop mattering.', slug: 'shuffle' },
       { no: 'Ch 11', title: 'Stream–Table Duality', hook: 'A table is a cached answer; the log is the thing that is true.', slug: 'stream-table' },
-      { no: 'Ch 11', title: 'Backpressure', hook: 'The producer is faster. Drop, buffer, or slow the sender — there is no fourth option.', slug: 'backpressure' },
+    ],
+  },
+  {
+    /* Extensions: chapters that start where the book stops. DDIA raises a
+       question in a few paragraphs, points at the answer (TCP, a paper, a
+       system), and moves on — these follow the pointer the rest of the way.
+       Kept off Parts I–III so nobody mistakes them for Kleppmann's outline. */
+    rn: 'IV',
+    pt: 'Extensions',
+    ps: 'where the book points',
+    ideas: [
+      { no: 'Ext 1', title: 'Backpressure', hook: 'The producer is faster. Drop, buffer, or slow the sender — there is no fourth option.', slug: 'backpressure' },
+      { no: 'Ext 2', title: 'Exactly-Once, Mechanically', hook: 'Three chapters say “effectively once.” The sequence number and the transactional commit that make it true, walked.' },
+      { no: 'Ext 3', title: 'The Rebalance', hook: 'Every consumer group pauses when membership changes. What actually happens in those seconds, and who decided it was worth it.' },
     ],
   },
 ]
@@ -147,7 +160,7 @@ export default function IndexPage() {
                 reading "11", because a hand-written number has no reason to
                 change when a card is added below it. */}
             <span className="gn-tag">{LIVE_COUNT} ideas live</span>
-            <span className="gn-tag">Parts I–III drawn</span>
+            <span className="gn-tag">Parts I–III drawn · extensions open</span>
           </div>
         </header>
 
