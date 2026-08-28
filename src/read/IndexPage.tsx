@@ -16,6 +16,8 @@ import {
   DualityDiagram,
   CompoundKeyDiagram,
   CreditLoopDiagram,
+  AtomicPairDiagram,
+  RebalanceTimelineDiagram,
 } from './diagrams'
 
 
@@ -35,6 +37,8 @@ export const PANEL: Record<string, ReactNode> = {
   shuffle: <ShuffleDiagram />,
   'stream-table': <DualityDiagram />,
   backpressure: <CreditLoopDiagram />,
+  'exactly-once': <AtomicPairDiagram />,
+  rebalance: <RebalanceTimelineDiagram />,
 }
 
 interface Idea {
@@ -95,8 +99,8 @@ export const PARTS: Part[] = [
     ps: 'where the book points',
     ideas: [
       { no: 'Ext 1', title: 'Backpressure', hook: 'The producer is faster. Drop, buffer, or slow the sender — there is no fourth option.', slug: 'backpressure' },
-      { no: 'Ext 2', title: 'Exactly-Once, Mechanically', hook: 'Three chapters say “effectively once.” The sequence number and the transactional commit that make it true, walked.' },
-      { no: 'Ext 3', title: 'The Rebalance', hook: 'Every consumer group pauses when membership changes. What actually happens in those seconds, and who decided it was worth it.' },
+      { no: 'Ext 2', title: 'Exactly-Once, Mechanically', hook: 'Three chapters say “effectively once.” The sequence number and the transactional commit that make it true, walked.', slug: 'exactly-once' },
+      { no: 'Ext 3', title: 'The Rebalance', hook: 'Every consumer group pauses when membership changes. What actually happens in those seconds, and who decided it was worth it.', slug: 'rebalance' },
     ],
   },
 ]

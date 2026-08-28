@@ -211,5 +211,5 @@ export const backpressure: Comic = {
     title: 'Pressure is conserved',
     body: 'Strip the vocabulary away and every system in this chapter is answering the same question: the producer is faster, so who gets hurt? Drop hurts the data, buffering hurts the reader (in seconds, priced by Little’s Law), backpressure hurts the sender — and a design that refuses to choose has still chosen, it just finds out during an incident. The mature architectures are legible maps of where pressure is allowed to land: credit loops where in-flight work must stay small, a log at the boundary where lag is survivable, refusal at the front door where the latency promise is the product. Underneath all of it, on every connection you have ever opened, the same two moves repeat — climb by a constant, cut by a fraction — quietly proving, at 45° on a plane two researchers drew in 1989, that strangers who cannot see each other can still share a pipe fairly.',
   },
-  next: { slug: 'tail-latency', title: 'Tail Latency' },
+  next: { slug: 'exactly-once', title: 'Exactly-Once, Mechanically' },
 }
