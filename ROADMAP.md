@@ -581,7 +581,22 @@ enthusiastic afternoon and discovering the cost in chapter two.
   the duality actually fixes — the same "one log, many consumers" the capacity page starts
   recommending at two derived systems). Nine new diagrams, all passing `check:diagrams`.
   Chapter numbers now say **DDIA 1st edition** everywhere they appear, since the 2nd
-  edition renumbers.
+  edition renumbers. The book later opened an **extension shelf** — Part IV,
+  "where the book points": chapters that start where the text stops, kept off
+  Parts I–III so nobody mistakes them for Kleppmann's outline. It opened with
+  three chapters. **Exactly-Once, Mechanically** (Ext 2: the retry that cannot
+  tell a lost write from a lost ack; the end-to-end argument as the load-bearing
+  idea; the sequence number and the transactional offset-plus-output commit;
+  and "once is per sink" — the guarantee ends at Kafka's door). **The Rebalance**
+  (Ext 3: one-partition-one-owner and what the stop-the-world protocol spends
+  to keep it; the two timers; eager → cooperative → KIP-848's barrier-free
+  reconciliation; the leader-consumer misconception). And first,
+  **Backpressure** (Ext 1: drop /
+  buffer / slow-the-sender as the only three exits; credit as the one mechanism under
+  TCP's window, prefetch, permits and `request(n)`; the Chiu–Jain phase plane for why
+  AIMD wins; and the pressure chain that ends with `send()` blocking the checkout API) —
+  it exists because the Kafka papers chapter judges bare push and never says what the
+  push camp built instead, and both deep-dives now point up at it.
 - **Component deep-dives** — flagship, 9-chapter treatment per infra component.
   - ✅ Kafka (flagship template: abstraction → anatomy w/ animated traces → hardware
     envelope → scale up/out → ops runbook + failure cascade → large-cluster reference → papers)

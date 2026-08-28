@@ -91,6 +91,8 @@ export default function KafkaPage() {
               { slug: 'partition-key', label: 'Choosing the Partition Key' },
               { slug: 'replication-leader', label: 'Leader & Followers' },
               { slug: 'replication-quorum', label: 'Leaderless & Quorums' },
+              { slug: 'stream-table', label: 'Stream–Table Duality' },
+              { slug: 'backpressure', label: 'Backpressure' },
             ]}
           />
 

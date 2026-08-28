@@ -11,6 +11,9 @@ import { distributedTroubles } from './distributed-troubles'
 import { consensus } from './consensus'
 import { shuffle } from './shuffle'
 import { streamTable } from './stream-table'
+import { backpressure } from './backpressure'
+import { exactlyOnce } from './exactly-once'
+import { rebalance } from './rebalance'
 
 /** Reading order — roughly DDIA (1st edition) chapter order across the live set. */
 export const COMICS: Comic[] = [
@@ -26,6 +29,9 @@ export const COMICS: Comic[] = [
   consensus,
   shuffle,
   streamTable,
+  backpressure,
+  exactlyOnce,
+  rebalance,
 ]
 
 export const COMIC_BY_SLUG: Record<string, Comic> = Object.fromEntries(COMICS.map((c) => [c.slug, c]))

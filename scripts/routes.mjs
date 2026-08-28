@@ -81,6 +81,18 @@ export const ROUTES = {
     title: 'Stream–Table Duality',
     desc: 'A table is what is true now; a log is everything that happened. A log is not a queue, and that is the entire trick.',
   },
+  '/ddia/read/backpressure': {
+    title: 'Backpressure',
+    desc: 'The producer outruns the consumer: drop, buffer, or slow the sender — no fourth option. The window arithmetic behind TCP, prefetch and consumer lag, and the 1989 geometry that says why AIMD wins.',
+  },
+  '/ddia/read/exactly-once': {
+    title: 'Exactly-Once, Mechanically',
+    desc: 'The ack never came: retry and you may duplicate, refuse and you may lose. The sequence number, the transactional commit, and the 1984 argument for why “once” is manufactured at the end.',
+  },
+  '/ddia/read/rebalance': {
+    title: 'The Rebalance',
+    desc: 'A consumer group promises each partition to one owner, and keeps the promise by stopping the world. The protocol, the storms it breeds, and twenty years of shrinking the pause.',
+  },
 
   /* Book B — the papers storybook. Chapter entries are duplicated from the
      chapter files, same deal as the comics: previews need them, and a test

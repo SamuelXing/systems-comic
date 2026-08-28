@@ -1694,3 +1694,288 @@ export function LocalGlobalIndexDiagram() {
     </svg>
   )
 }
+
+/** Ch 11b — the producer outruns the consumer: three exits, no fourth. */
+export function FlowForkDiagram() {
+  return (
+    <svg viewBox="0 0 200 156" role="img" aria-label="A producer feeding a queue faster than the consumer drains it. Three exits: drop messages, let the buffer grow, or slow the sender down.">
+      <defs>
+        <marker id="gn-bpf-i" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
+          <path d="M0 0 L7 3.5 L0 7 z" fill={INK} />
+        </marker>
+        <marker id="gn-bpf-t" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
+          <path d="M0 0 L7 3.5 L0 7 z" fill={TERRA} />
+        </marker>
+        <marker id="gn-bpf-d" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
+          <path d="M0 0 L7 3.5 L0 7 z" fill={DENIM} />
+        </marker>
+      </defs>
+      <text x="100" y="14" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="9" fill={TERRA}>λ &gt; μ</text>
+      {/* producer → queue → consumer */}
+      <rect x="4" y="30" width="46" height="24" rx="3" fill="#fff" stroke={INK} strokeWidth="2" />
+      <text x="27" y="45.5" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="7.5" fill={INK}>producer</text>
+      <path d="M52 42 L74 42" stroke={INK} strokeWidth="2.5" markerEnd="url(#gn-bpf-i)" />
+      <rect x="77" y="30" width="46" height="24" rx="3" fill="#fff" stroke={INK} strokeWidth="2" />
+      {[80, 89, 98, 107].map((x) => (
+        <rect key={x} x={x} y="34" width="7" height="16" fill="#fbeee8" stroke={TERRA} strokeWidth="1" />
+      ))}
+      <rect x="116" y="34" width="4" height="16" fill="#fff" stroke={MUTED} strokeWidth="0.8" />
+      <path d="M125 42 L146 42" stroke={INK} strokeWidth="1.4" markerEnd="url(#gn-bpf-i)" />
+      <rect x="150" y="30" width="44" height="24" rx="3" fill="#fff" stroke={INK} strokeWidth="2" />
+      <text x="172" y="45.5" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="7.5" fill={INK}>consumer</text>
+      {/* exit 1 — drop */}
+      <path d="M90 58 L90 86" stroke={TERRA} strokeWidth="2" strokeDasharray="3 3" markerEnd="url(#gn-bpf-t)" />
+      <text x="90" y="100" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="8" fill={TERRA}>drop</text>
+      {/* exit 2 — buffer grows */}
+      {[88, 98, 108].map((y) => (
+        <rect key={y} x="104" y={y} width="16" height="8" fill="#fbeee8" stroke={TERRA} strokeWidth="1" />
+      ))}
+      <text x="112" y="130" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="7.5" fill={MUTED}>buffer</text>
+      {/* exit 3 — backpressure, back to the sender */}
+      <path d="M80 58 Q 53 84 29 58" fill="none" stroke={DENIM} strokeWidth="2" strokeDasharray="3 3" markerEnd="url(#gn-bpf-d)" />
+      <text x="44" y="104" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="7.5" fill={DENIM}>slow the sender</text>
+      <text x="100" y="148" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="7.5" fill={MUTED}>three exits — there is no fourth</text>
+    </svg>
+  )
+}
+
+/** Ch 11b — waiting time against utilization: the hyperbola that sets the 80% rule. */
+export function DelayCurveDiagram() {
+  return (
+    <svg viewBox="0 0 200 150" role="img" aria-label="Average waiting time against utilization. The curve rises slowly, then goes vertical as utilization approaches one; at 80 percent the wait is already five times the idle wait.">
+      {/* axes */}
+      <path d="M24 126 L192 126" stroke={INK} strokeWidth="1.5" />
+      <path d="M24 126 L24 16" stroke={INK} strokeWidth="1.5" />
+      <text x="30" y="14" fontFamily="JetBrains Mono, monospace" fontSize="7.5" fill={MUTED}>wait</text>
+      <text x="90" y="142" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="7.5" fill={MUTED}>utilization λ/μ</text>
+      <text x="34" y="30" fontFamily="JetBrains Mono, monospace" fontSize="8" fill={INK}>W = 1 / (μ − λ)</text>
+      {/* asymptote at 100% */}
+      <path d="M184 20 L184 126" stroke={INK} strokeWidth="1" strokeDasharray="3 3" />
+      <text x="184" y="138" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="7" fill={INK}>100%</text>
+      {/* the curve */}
+      <path
+        d="M24 124 L56 122 L88 118 L104 114 L120 108 L136 99 L144 92 L152 80 L158 68 L163 54 L167 40 L170 28 L172 20"
+        fill="none"
+        stroke={TERRA}
+        strokeWidth="2.5"
+      />
+      {/* the 80% mark */}
+      <path d="M152 84 L152 126" stroke={TERRA} strokeWidth="1.2" strokeDasharray="3 3" />
+      <circle cx="152" cy="80" r="3" fill={TERRA} stroke={INK} strokeWidth="1.2" />
+      <text x="144" y="76" textAnchor="end" fontFamily="JetBrains Mono, monospace" fontSize="7" fill={TERRA}>5× the idle wait</text>
+      <text x="152" y="138" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="7" fill={TERRA}>80%</text>
+    </svg>
+  )
+}
+
+/** Ch 11b — credit flow: the receiver counts out permission to send, acks refill it. */
+export function CreditLoopDiagram() {
+  return (
+    <svg viewBox="0 0 200 150" role="img" aria-label="A sender may have at most as many messages in flight as the receiver has granted credit; each acknowledgement returns one credit. TCP's window, RabbitMQ's prefetch, Pulsar's permits and Reactive Streams' request are the same mechanism.">
+      <defs>
+        <marker id="gn-bpc-i" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
+          <path d="M0 0 L7 3.5 L0 7 z" fill={INK} />
+        </marker>
+        <marker id="gn-bpc-d" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
+          <path d="M0 0 L7 3.5 L0 7 z" fill={DENIM} />
+        </marker>
+      </defs>
+      {/* ack → credit refill, over the top */}
+      <path d="M155 26 Q 98 4 42 26" fill="none" stroke={DENIM} strokeWidth="2" strokeDasharray="4 3" markerEnd="url(#gn-bpc-d)" />
+      <text x="98" y="10" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="7" fill={DENIM}>ack → credit +1</text>
+      {/* sender and receiver */}
+      <rect x="8" y="28" width="52" height="26" rx="3" fill="#fff" stroke={INK} strokeWidth="2" />
+      <text x="34" y="44.5" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="8" fill={INK}>sender</text>
+      <rect x="138" y="28" width="54" height="26" rx="3" fill="#fff" stroke={INK} strokeWidth="2" />
+      <text x="165" y="44.5" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="8" fill={INK}>receiver</text>
+      {/* in flight */}
+      <path d="M60 40 L134 40" stroke={INK} strokeWidth="2" markerEnd="url(#gn-bpc-i)" />
+      <circle cx="85" cy="40" r="3.5" fill={DENIM} stroke={INK} strokeWidth="1.2" />
+      <circle cx="105" cy="40" r="3.5" fill={DENIM} stroke={INK} strokeWidth="1.2" />
+      <text x="98" y="64" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="7.5" fill={INK}>in flight ≤ credit</text>
+      {/* the receiver's buffer is the credit */}
+      {[139.5, 153, 166.5, 180].map((x, i) => (
+        <rect key={x} x={x} y="74" width="12" height="14" fill={i < 2 ? '#fbeee8' : '#fff'} stroke={i < 2 ? TERRA : MUTED} strokeWidth="1.2" />
+      ))}
+      <text x="165" y="102" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="7" fill={MUTED}>credit = 2</text>
+      <text x="100" y="128" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="7" fill={MUTED}>rwnd · prefetch · permits · request(n)</text>
+    </svg>
+  )
+}
+
+/** Ch 11b — the Chiu–Jain phase plane: AIMD walks an unfair start into the fair, full corner. */
+export function ChiuJainDiagram() {
+  return (
+    <svg viewBox="0 0 200 170" role="img" aria-label="Two senders' rates as a point on a plane. Additive increase slides the point along 45 degrees toward fairness; multiplicative decrease scales it toward the origin without losing that gain. The zigzag converges where the efficiency and fairness lines cross.">
+      <defs>
+        <marker id="gn-bpj-t" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" refX="5.5" refY="4" orient="auto">
+          <path d="M0 0 L8 4 L0 8 z" fill={TERRA} />
+        </marker>
+      </defs>
+      {/* axes */}
+      <path d="M30 140 L194 140" stroke={INK} strokeWidth="1.5" />
+      <path d="M30 140 L30 14" stroke={INK} strokeWidth="1.5" />
+      <text x="186" y="152" fontFamily="JetBrains Mono, monospace" fontSize="8" fill={INK}>x₁</text>
+      <text x="14" y="20" fontFamily="JetBrains Mono, monospace" fontSize="8" fill={INK}>x₂</text>
+      {/* efficiency line x1 + x2 = C */}
+      <path d="M130 140 L30 40" stroke={INK} strokeWidth="2" />
+      <text x="36" y="30" fontFamily="JetBrains Mono, monospace" fontSize="7" fill={INK}>x₁+x₂ = C</text>
+      {/* fairness line x1 = x2 */}
+      <path d="M30 140 L125 45" stroke={DENIM} strokeWidth="2" strokeDasharray="4 3" />
+      <text x="132" y="44" fontFamily="JetBrains Mono, monospace" fontSize="7" fill={DENIM}>x₁ = x₂</text>
+      {/* AIMD trajectory: additive up-45°, multiplicative back toward the origin */}
+      <path
+        d="M104 128 L111 121 L93.2 125.2 L104.2 114.2 L87.9 119.9 L98.9 108.9 L83.7 115.7 L94.7 104.7 L80.5 112.5 L91.5 101.5"
+        fill="none"
+        stroke={TERRA}
+        strokeWidth="2"
+        markerEnd="url(#gn-bpj-t)"
+      />
+      <circle cx="104" cy="128" r="3" fill={TERRA} stroke={INK} strokeWidth="1.2" />
+      <text x="93" y="135" textAnchor="end" fontFamily="JetBrains Mono, monospace" fontSize="7" fill={TERRA}>start</text>
+      {/* where it is heading */}
+      <circle cx="80" cy="90" r="3.5" fill={DENIM} stroke={INK} strokeWidth="1.2" />
+      <text x="118" y="78" fontFamily="JetBrains Mono, monospace" fontSize="7" fill={MUTED}>fair + full</text>
+      <text x="100" y="164" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="6.5" fill={MUTED}>+a slides at 45° · ×b scales through the origin</text>
+    </svg>
+  )
+}
+
+/** Ext 2 — a lost ack makes retry ambiguous; a sequence number resolves it. */
+export function RetryDupDiagram() {
+  return (
+    <svg viewBox="0 0 200 158" role="img" aria-label="Top: a producer whose ack was lost retries and the log stores the message twice. Bottom: the same retry carries a sequence number, the broker recognizes it and stores the message once.">
+      <defs>
+        <marker id="gn-eo-i" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
+          <path d="M0 0 L7 3.5 L0 7 z" fill={INK} />
+        </marker>
+      </defs>
+      {/* — uncounted — */}
+      <text x="6" y="14" fontFamily="JetBrains Mono, monospace" fontSize="7" fill={TERRA}>uncounted</text>
+      <rect x="6" y="20" width="44" height="18" rx="3" fill="#fff" stroke={INK} strokeWidth="2" />
+      <text x="28" y="32" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="6.5" fill={INK}>producer</text>
+      <rect x="140" y="20" width="54" height="40" rx="3" fill="#fff" stroke={INK} strokeWidth="2" />
+      <text x="167" y="31" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="6.5" fill={MUTED}>log</text>
+      <rect x="146" y="36" width="20" height="14" fill="#fbeee8" stroke={TERRA} strokeWidth="1.2" />
+      <text x="156" y="45.5" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="7" fill={TERRA}>m</text>
+      <rect x="170" y="36" width="20" height="14" fill="#fbeee8" stroke={TERRA} strokeWidth="1.2" />
+      <text x="180" y="45.5" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="7" fill={TERRA}>m</text>
+      <path d="M52 26 L136 26" stroke={INK} strokeWidth="1.5" markerEnd="url(#gn-eo-i)" />
+      <text x="94" y="20" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="6.5" fill={INK}>send m</text>
+      <path d="M136 40 L104 40" stroke={TERRA} strokeWidth="1.2" strokeDasharray="3 3" />
+      <text x="78" y="38" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="6.5" fill={TERRA}>✗ ack lost</text>
+      <path d="M52 56 L136 56" stroke={INK} strokeWidth="1.5" markerEnd="url(#gn-eo-i)" />
+      <text x="94" y="50" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="6.5" fill={INK}>retry m</text>
+      <text x="167" y="70" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="6.5" fill={TERRA}>twice</text>
+      <line x1="6" y1="79" x2="194" y2="79" stroke={MUTED} strokeWidth="1" strokeDasharray="3 3" />
+      {/* — counted — */}
+      <text x="6" y="94" fontFamily="JetBrains Mono, monospace" fontSize="7" fill={DENIM}>pid 7 · seq 42</text>
+      <rect x="6" y="100" width="44" height="18" rx="3" fill="#fff" stroke={INK} strokeWidth="2" />
+      <text x="28" y="112" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="6.5" fill={INK}>producer</text>
+      <rect x="140" y="100" width="54" height="40" rx="3" fill="#fff" stroke={INK} strokeWidth="2" />
+      <text x="167" y="111" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="6.5" fill={MUTED}>log</text>
+      <rect x="146" y="116" width="20" height="14" fill="#eaf0f7" stroke={DENIM} strokeWidth="1.2" />
+      <text x="156" y="125.5" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="6.5" fill={DENIM}>#42</text>
+      <rect x="170" y="116" width="20" height="14" fill="#fff" stroke={MUTED} strokeWidth="0.8" strokeDasharray="2 2" />
+      <path d="M52 106 L136 106" stroke={INK} strokeWidth="1.5" markerEnd="url(#gn-eo-i)" />
+      <text x="94" y="100" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="6.5" fill={INK}>send #42</text>
+      <path d="M136 120 L104 120" stroke={TERRA} strokeWidth="1.2" strokeDasharray="3 3" />
+      <text x="78" y="118" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="6.5" fill={TERRA}>✗ ack lost</text>
+      <path d="M52 136 L136 136" stroke={INK} strokeWidth="1.5" markerEnd="url(#gn-eo-i)" />
+      <text x="94" y="130" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="6.5" fill={INK}>retry #42</text>
+      <text x="100" y="152" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="6.5" fill={DENIM}>seq ≤ last seen → dropped, stored once</text>
+    </svg>
+  )
+}
+
+/** Ext 2 — the output record and the input offset commit as one atomic fact. */
+export function AtomicPairDiagram() {
+  return (
+    <svg viewBox="0 0 200 150" role="img" aria-label="A consumer writes its output record and its input offset inside one transaction: on commit both land, on abort neither does.">
+      <defs>
+        <marker id="gn-eo2-i" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
+          <path d="M0 0 L7 3.5 L0 7 z" fill={INK} />
+        </marker>
+      </defs>
+      <rect x="70" y="8" width="60" height="22" rx="3" fill="#fff" stroke={INK} strokeWidth="2" />
+      <text x="100" y="22" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="7" fill={INK}>consumer</text>
+      <path d="M100 30 L100 46" stroke={INK} strokeWidth="1.5" markerEnd="url(#gn-eo2-i)" />
+      <rect x="30" y="50" width="140" height="58" rx="3" fill="none" stroke={INK} strokeWidth="2" />
+      <text x="100" y="63" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="7" fill={INK}>one transaction</text>
+      <rect x="40" y="70" width="58" height="28" rx="2" fill="#eaf0f7" stroke={DENIM} strokeWidth="1.2" />
+      <text x="69" y="82" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="6.5" fill={DENIM}>result</text>
+      <text x="69" y="92" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="6.5" fill={DENIM}>→ topic B</text>
+      <rect x="104" y="70" width="58" height="28" rx="2" fill="#eaf0f7" stroke={DENIM} strokeWidth="1.2" />
+      <text x="133" y="82" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="6.5" fill={DENIM}>offset 119</text>
+      <text x="133" y="92" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="6.5" fill={DENIM}>→ offsets log</text>
+      <text x="100" y="124" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="7" fill={DENIM}>commit: both land · abort: neither</text>
+      <text x="100" y="140" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="6.5" fill={TERRA}>two commits + a crash between = dup or loss</text>
+    </svg>
+  )
+}
+
+/** Ext 3 — a membership change stops the whole group between revoke and sync. */
+export function RebalanceTimelineDiagram() {
+  return (
+    <svg viewBox="0 0 200 150" role="img" aria-label="A consumer group's timeline: consuming, then a member joins and every partition is revoked while the group rejoins and syncs — nobody consumes — then consuming resumes under a new generation.">
+      <text x="80" y="30" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="6.5" fill={TERRA}>c3 joins</text>
+      <rect x="10" y="40" width="70" height="20" fill={DENIM} stroke={INK} strokeWidth="1.5" />
+      <text x="45" y="53" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="6.5" fill="#fff">consuming</text>
+      <rect x="80" y="40" width="50" height="20" fill="#fbeee8" stroke={TERRA} strokeWidth="1.5" />
+      <rect x="130" y="40" width="60" height="20" fill={DENIM} stroke={INK} strokeWidth="1.5" />
+      <text x="160" y="53" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="6.5" fill="#fff">consuming</text>
+      <text x="105" y="74" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="6.5" fill={TERRA}>nobody consumes</text>
+      <text x="45" y="90" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="6.5" fill={MUTED}>generation n</text>
+      <text x="160" y="90" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="6.5" fill={MUTED}>n + 1</text>
+      <text x="100" y="112" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="6.5" fill={INK}>revoke all → JoinGroup → assign → SyncGroup</text>
+      <text x="100" y="138" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="6.5" fill={MUTED}>every membership change stops the whole group</text>
+    </svg>
+  )
+}
+
+/** Ext 3 — eager rebalancing lifts every partition; cooperative moves only one. */
+export function CooperativeDiagram() {
+  const CONS = [10, 80, 150]
+  return (
+    <svg viewBox="0 0 200 158" role="img" aria-label="Eager rebalancing: all six partitions revoked at once, nobody owns anything. Cooperative rebalancing: five partitions stay attached to their consumers and only the one that moves pauses.">
+      <defs>
+        <marker id="gn-co-t" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
+          <path d="M0 0 L7 3.5 L0 7 z" fill={TERRA} />
+        </marker>
+      </defs>
+      <text x="6" y="14" fontFamily="JetBrains Mono, monospace" fontSize="7" fill={TERRA}>eager: drop everything</text>
+      {CONS.map((x, i) => (
+        <g key={x}>
+          <rect x={x} y="22" width="40" height="16" rx="3" fill="#fff" stroke={INK} strokeWidth="1.5" />
+          <text x={x + 20} y="33" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="6.5" fill={INK}>{'c' + (i + 1)}</text>
+        </g>
+      ))}
+      {[0, 1, 2, 3, 4, 5].map((i) => (
+        <g key={i}>
+          <rect x={10 + i * 30} y="52" width="24" height="14" fill="#fbeee8" stroke={TERRA} strokeWidth="1.2" />
+          <text x={22 + i * 30} y="61.5" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="6.5" fill={TERRA}>{'p' + i}</text>
+        </g>
+      ))}
+      <text x="100" y="84" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="6.5" fill={TERRA}>all six in the air — nobody owns anything</text>
+      <line x1="6" y1="92" x2="194" y2="92" stroke={MUTED} strokeWidth="1" strokeDasharray="3 3" />
+      <text x="6" y="104" fontFamily="JetBrains Mono, monospace" fontSize="7" fill={DENIM}>cooperative: only what moves, moves</text>
+      {CONS.map((x, i) => (
+        <g key={x}>
+          <rect x={x} y="110" width="40" height="16" rx="3" fill="#fff" stroke={INK} strokeWidth="1.5" />
+          <text x={x + 20} y="121" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="6.5" fill={INK}>{'c' + (i + 1)}</text>
+        </g>
+      ))}
+      <path d="M170 132 L64 132" stroke={TERRA} strokeWidth="1.2" strokeDasharray="3 3" markerEnd="url(#gn-co-t)" />
+      {[
+        { x: 10, p: 'p0' }, { x: 36, p: 'p1' }, { x: 80, p: 'p2' }, { x: 106, p: 'p3' }, { x: 144, p: 'p4' },
+      ].map((c) => (
+        <g key={c.p}>
+          <rect x={c.x} y="138" width="24" height="14" fill="#eaf0f7" stroke={DENIM} strokeWidth="1.2" />
+          <text x={c.x + 12} y="147.5" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="6.5" fill={DENIM}>{c.p}</text>
+        </g>
+      ))}
+      <rect x="170" y="138" width="24" height="14" fill="#fbeee8" stroke={TERRA} strokeWidth="1.2" />
+      <text x="182" y="147.5" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="6.5" fill={TERRA}>p5</text>
+    </svg>
+  )
+}

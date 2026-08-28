@@ -193,5 +193,5 @@ export const streamTable: Comic = {
     title: 'One ordered story, many readers',
     body: 'The duality is not a clever observation about data structures; it is a way out of a specific and very common mess. The moment a second system needs to know about every change, writing to both from application code guarantees they will eventually disagree — silently, and in a way neither can detect from the inside. Write once to an ordered log and let every store be a view of it, and the systems can lag but they cannot diverge, because they are all reading the same story in the same order. The table stops being the truth and becomes what it always really was: a fast answer you are free to throw away and compute again.',
   },
-  next: { slug: 'tail-latency', title: 'Tail Latency' },
+  next: { slug: 'backpressure', title: 'Backpressure' },
 }

@@ -103,7 +103,7 @@ export const kafka: Chapter = {
                   {
                     label: 'The broker pushes and does not track anything',
                     verdict: 'dead',
-                    why: 'It removes the bookkeeping and creates a worse problem: a consumer slower than the producer must be flooded, throttled or dropped, and the broker has to decide which. Pull inverts that cleanly — each consumer takes what it can handle and simply falls behind if it cannot keep up. **Falling behind is a fine state; being flooded is not.**',
+                    why: 'It removes the bookkeeping and creates a worse problem: a consumer slower than the producer must be flooded, throttled or dropped, and the broker has to decide which. Pull inverts that cleanly — each consumer takes what it can handle and simply falls behind if it cannot keep up. **Falling behind is a fine state; being flooded is not.** *A fairness note from later history: push did not die, it grew a counter — RabbitMQ’s prefetch and Pulsar’s permits push only as far as the consumer has granted credit. The comic book tells that story under Backpressure.*',
                   },
                 ],
               },
@@ -334,6 +334,7 @@ export const kafka: Chapter = {
     { label: 'What “Before” Even Means — Ch 7', to: '/papers/lamport', live: true },
     { label: 'Consensus as a Service — Ch 9', to: '/papers/zookeeper', live: true },
     { label: 'Kafka — the deep dive', to: '/ddia/components/kafka', live: true },
+    { label: 'Backpressure — what the push camp built instead', to: '/ddia/read/backpressure', live: true },
   ],
   finale: {
     title: 'The log stopped being an implementation detail',
