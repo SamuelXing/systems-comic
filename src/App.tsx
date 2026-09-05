@@ -108,6 +108,7 @@ export default function App() {
           <Route path="/papers/season" element={<Navigate to="/papers" replace />} />
           <Route path="/papers/season/1" element={<Navigate to="/papers" replace />} />
           <Route path="/papers/season/2" element={<PapersIndexPage season={2} />} />
+          <Route path="/papers/season/3" element={<PapersIndexPage season={3} />} />
           <Route path="/papers/:slug" element={<PaperPage />} />
 
           {/* Shared tools. Two tabs, each a real route so it can be linked. */}

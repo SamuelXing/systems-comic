@@ -747,3 +747,7 @@ a.pb-row.pb-line:hover .tt em { color: var(--ink); }
   .bs-seasons .row { grid-template-columns: auto 1fr; row-gap: 2px; }
   .bs-seasons .sc { grid-column: 2; }
 }
+
+/* An act opener before its figure exists. Same block, one column — never a
+   framed empty cell where a drawing has not been made yet. */
+.pb-actsum.nofig { grid-template-columns: minmax(0, 1fr); }

@@ -25,11 +25,26 @@ describe('the season table of contents', () => {
     }
   })
 
-  it('never half-writes an opener', () => {
-    /* A figure with no words next to it, or words with an empty frame beside
-       them, both render as something broken rather than as something absent. */
-    const half = TOC.filter((a) => !!a.figure !== !!a.summary).map((a) => a.act)
-    expect(half).toEqual([])
+  it('never draws an act figure with no words beside it', () => {
+    /* Originally this banned both directions, because a figure with no words
+       and words with an empty frame both render as broken rather than absent.
+       Season 3 showed the asymmetry: an act whose chapters are not written yet
+       has a summary and no drawing, and that is a state the book passes
+       through every time a season starts. The index renders those in one
+       column (.pb-actsum.nofig) rather than framing an empty cell, so only the
+       other direction is still a fault. */
+    const orphanFigure = TOC.filter((a) => !!a.figure && !a.summary).map((a) => a.act)
+    expect(orphanFigure).toEqual([])
+  })
+
+  it('gives every act with live chapters a figure', () => {
+    /* The half of the old rule that still bites, moved to where it belongs: a
+       summary may outrun its drawing while an act is unwritten, but an act a
+       reader can actually read into must not. */
+    const liveNoFigure = TOC.filter(
+      (a) => a.entries.some((e) => e.slug && CHAPTER_BY_SLUG[e.slug]?.paper) && !a.figure,
+    ).map((a) => a.act)
+    expect(liveNoFigure).toEqual([])
   })
 
   it('resolves every figure key, and leaves no figure unused', () => {

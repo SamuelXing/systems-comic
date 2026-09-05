@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { ROUTES } from '../../scripts/routes.mjs'
 import { SEASONS, progressLabel, remainingLabel, seasonPath, seasonProgress } from '../papers/book'
 // Vite's ?raw, not node:fs — same reason routes.test.ts gives: the app
 // tsconfig has no node types, and adding them for one test widens the
@@ -67,7 +68,13 @@ describe('the shelf card summarises the whole book', () => {
   })
 
   it('sends each row to a season page that exists', () => {
-    expect(SEASONS.map((s) => seasonPath(s.n))).toEqual(['/papers', '/papers/season/2'])
+    /* The literal list here was ['/papers', '/papers/season/2'], which meant
+       this test failed when a season was ADDED — reporting a change rather
+       than a fault. What it is actually for is that every row on the shelf
+       card opens something, so it asks that instead. */
+    const paths = SEASONS.map((s) => seasonPath(s.n))
+    expect(paths.length).toBe(SEASONS.length)
+    for (const p of paths) expect(ROUTES[p], `the shelf links ${p}, which has no route`).toBeTruthy()
   })
 
   it('states what is live and what is missing as two separate facts', () => {
@@ -77,7 +84,7 @@ describe('the shelf card summarises the whole book', () => {
        total. Two plain statements do not have that problem. */
     const { live, total } = seasonProgress()
     const left = total - live
-    expect(remainingLabel()).toBe(left === 0 ? 'both seasons finished' : `${left} still to write`)
+    expect(remainingLabel()).toBe(left === 0 ? 'every season finished' : `${left} still to write`)
     expect(`${progressLabel()} · ${remainingLabel()}`).not.toMatch(/ of /)
     /* the specific line this pair exists to prevent: a count of nothing,
        printed as though it were a count of something */

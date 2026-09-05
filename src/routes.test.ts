@@ -37,7 +37,10 @@ describe('the route table still matches the site', () => {
     /* Paths under /papers/ that are not chapters, listed by hand on purpose:
        the point of this assertion is that a path nobody meant to add fails it,
        so exceptions have to be typed out rather than pattern-matched away. */
-    const notChapters = ['/papers/season/2']
+    /* Derived, not listed. This was ['/papers/season/2'] and a third season
+       made it wrong — the same hand-typed-list failure the progress counters
+       kept hitting, now inside the test that is supposed to catch drift. */
+    const notChapters = SEASONS.map((s) => seasonPath(s.n)).filter((p) => p !== '/papers')
     const expected = [...CHAPTERS.map((c) => `/papers/${c.slug}`), ...notChapters].sort()
     const tablePaths = Object.keys(ROUTES)
       .filter((p) => p.startsWith('/papers/'))

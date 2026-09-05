@@ -24,7 +24,28 @@ be a writing queue. What is left is the cost calculator, one rejected experiment
 kept as a warning, and the question of which book starts next — which is the one
 that actually needs answering.
 
-### The papers book — finished, and what it cost to say so
+### The papers book — Season 3 is the map
+
+**Season 3 is up as a contents page**: thirteen chapters and a close, nothing
+written. The first two seasons argue about data, and both assume without
+arguing that a broken machine has *stopped* and that the machine itself is
+free. Season 3 reads the papers underneath that — FLP, Chandy-Lamport, partial
+synchrony, the Byzantine papers, and the scheduling and caching classics.
+
+It also closes a hole the adversarial pass found and did not fix. #84 caught
+Chapter 23 claiming six times that Chapter 7 covered Chandy-Lamport; the
+sentences were corrected and the absence stayed, because the algorithm is
+genuinely not in this book. FLP was missing on the same terms — two chapters
+about reaching consensus with no impossibility result underneath them.
+
+Source: the CS 525 reading list (UIUC, spring 2026). Compared paper by paper,
+**9 of the 82 papers it names are already chapters and 73 are not**, which is
+what made this worth doing as a season rather than as a duplicate. The 2025
+frontier is deliberately left alone — a paper from this year is a claim and a
+paper from 1985 is a fact — and the ML systems half stays book D's, which this
+file already assigns by name.
+
+### The papers book — Seasons 1 and 2, and what they cost to finish
 
 **31 chapters, both seasons, 30 papers plus a prologue that reads three more.**
 Season 1 is where data lives, Season 2 is what happens when it stops sitting still.
@@ -73,6 +94,45 @@ times that Chapter 7 covered Chandy-Lamport, and Chapter 7 is Lamport 1978, whic
 never mentions it. **Three of the eight are now guarded and the big one cannot be**,
 because catching it needs a model of what each chapter contains. That is the
 argument for doing this by hand on any book that ships from here.
+
+### Book three — Kubernetes, built as a map and rejected
+
+**Shipped as #88 and #89, closed unmerged.** Not a scoping problem and not a
+missing chapter. The premise did not survive contact with its own sources, and
+this is a record of what killed it rather than a plan to try again.
+
+The pitch — the one this file made — was that Kubernetes is unusual among
+infrastructure in having its *why* published, so the book inherits the
+papers-book method. Reading the three answer keys before writing anything:
+
+- **Three of the five Act I chapters read the same 24-page ACM Queue article.**
+  That is a magazine piece, not a peer-reviewed paper.
+- **The other two read Borg and Omega, which are not Kubernetes.** Using a paper
+  about a predecessor to explain a system is the sentence-level error #84 found
+  in book B, committed at the scale of an act.
+- **Nine of fourteen chapters had no paper at all.** The words "kubelet" and
+  "extensib" do not appear in that article.
+
+Strip the answer-key framing and what remains is a book about Kubernetes
+internals — a fine book, and not this site's, because the method here is read
+the primary source and design it yourself. Two further strikes: reading source
+is book F's format, and the boundary rule says three books arguing over one
+territory is how a shelf turns into a pile; and **Kubernetes moves**, so a book
+pinned to 2026 API machinery ages exactly the way a price list does, which is
+the maintenance class this file already refuses for the cost calculator.
+
+**The rule worth keeping, because it generalises to every book below: a book
+needs a primary source per chapter, or it is a different kind of book and has
+to say so before it starts.** The check is cheap — download the sources, grep
+them for the words the chapter list promises — and it costs a day rather than a
+season.
+
+What survives: the Terraform comparison. Kubernetes observes the world every
+loop; Terraform keeps a state file it believes; drift, `refresh`, `import` and
+state locking all fall out of that one difference, and so, in the other
+direction, does Kubernetes having no preview and no approval gate. That is an
+idea comic in book A. The planning notes and the three PDFs are in
+`notes/2026-08-18-kubernetes-book-plan.md`.
 
 ### A third calculator: cost
 

@@ -119,8 +119,13 @@ export default function PapersIndexPage({ season: seasonN }: { season: number })
             <section className="pb-act box" key={act.act} data-obs>
               <div className="ah">{act.act}</div>
               {act.summary && (
-                <div className="pb-actsum">
-                  <div className="fig">{Figure && <Figure />}</div>
+                /* nofig: an act's picture arrives with its chapters, and a
+                   season that is still a map has summaries and no figures. The
+                   two-column grid would leave the frame empty, which is the
+                   same hole #82 removed from the panels — so the block drops to
+                   one column instead of drawing a box around nothing. */
+                <div className={'pb-actsum' + (Figure ? '' : ' nofig')}>
+                  {Figure && <div className="fig"><Figure /></div>}
                   <div className="txt">
                     <p>{act.summary}</p>
                     {act.next && <p className="nx">{act.next}</p>}

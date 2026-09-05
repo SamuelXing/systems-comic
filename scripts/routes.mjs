@@ -177,6 +177,10 @@ export const ROUTES = {
     title: 'Season 2 · When the Data Stops Sitting Still',
     desc: 'The delay between something happening and somebody being able to see it — and what each way of shortening it costs. Thirteen papers on data in motion.',
   },
+  '/papers/season/3': {
+    title: 'Season 3 · What Everything Else Assumed',
+    desc: 'The papers underneath the first two seasons: the proof that agreement is impossible, what changes when a machine lies rather than dies, and who gets the machine.',
+  },
   '/papers/season-1': {
     title: 'The Season, in One Page',
     desc: 'Seventeen papers, and the same three moves under all of them. What the acts add up to, and the ideas that cross every one of them without getting a chapter of their own.',
