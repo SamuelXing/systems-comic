@@ -131,7 +131,7 @@ export const remainingLabel = () => {
      bug. It also would have been the wrong claim: "complete" says nobody will
      add to it, which nobody has decided. What is true is that both seasons
      are finished, so say that. */
-  return total - live === 0 ? 'both seasons finished' : `${total - live} still to write`
+  return total - live === 0 ? 'every season finished' : `${total - live} still to write`
 }
 
 
@@ -337,6 +337,82 @@ const SEASON_2_ACTS: TocAct[] = [
  * unwritten chapters are: the shape of the argument is the thing worth seeing
  * first, and a map with holes in it is more honest than no map.
  */
+/**
+ * Season 3. Seasons 1 and 2 both assume two things without ever arguing for
+ * them: that a broken machine has STOPPED, and that the scarce resource is
+ * DATA. Every design in thirty-one chapters is built on that pair, and the
+ * papers that establish, break and price it were never read.
+ *
+ * It also closes a hole the adversarial pass found rather than fixed. Chapter
+ * 23 claimed six times that Chapter 7 covered Chandy-Lamport; #84 corrected
+ * the sentences and left the absence, because the algorithm genuinely is not
+ * in this book. FLP is missing on the same terms — two chapters about reaching
+ * consensus and no impossibility result underneath them.
+ *
+ * Source: the CS 525 reading list (UIUC, spring 2026), compared paper by paper
+ * against what is already here. Of the 82 papers it names, 9 are already
+ * chapters. This season takes the durable part of the remaining 73 and leaves
+ * the 2025 frontier alone — a paper from this year is a claim, and a paper
+ * from 1985 is a fact.
+ *
+ * NOT taken, on purpose: the ML systems half (Megatron, FlashAttention,
+ * PagedAttention, Orca). The roadmap assigns those to book D by name, and two
+ * books arguing over one territory is how a shelf turns into a pile.
+ */
+const SEASON_3_ACTS: TocAct[] = [
+  {
+    act: 'Act I · The Floor Underneath',
+    summary:
+      'Thirty-one chapters have stood on results none of them named. There is a proof that the thing Act III of Season 1 spends three chapters building cannot be done at all, and the reason those chapters work anyway is a second paper defining the middle ground between a network that is reliable and one that is not. And there is an algorithm this book has referred to and never contained.',
+    next: 'Next: every one of those results assumes a broken machine has stopped. Suppose it lies instead.',
+    entries: [
+      { no: 'Ch 31', title: 'The Proof That It Cannot Be Done', paper: 'FLP impossibility — JACM 1985' },
+      { no: 'Ch 32', title: 'A Photograph Nobody Posed For', paper: 'Distributed Snapshots — Chandy & Lamport, ACM TOCS 1985' },
+      { no: 'Ch 33', title: 'Eventually, the Network Behaves', paper: 'Consensus in the Presence of Partial Synchrony — JACM 1988' },
+      { no: 'Ch 34', title: 'The Half Nobody Wrote Down', paper: 'Paxos Made Live — PODC 2007' },
+    ],
+  },
+  {
+    act: 'Act II · Machines That Lie',
+    summary:
+      'Every failure in this book so far has been honest: a machine stops, or a message is lost, and nobody is trying to fool you. Drop that assumption — because the machine is compromised, or because somebody is paid to cheat — and the arithmetic changes. Not the algorithms; the arithmetic. A majority stops being enough.',
+    next: 'Next: nobody is lying, and there is still not enough machine to go round.',
+    entries: [
+      { no: 'Ch 35', title: 'A Majority Is Not Enough', paper: 'The Byzantine Generals Problem — ACM TOPLAS 1982' },
+      { no: 'Ch 36', title: 'Fast Enough to Actually Run', paper: 'Practical Byzantine Fault Tolerance — OSDI 1999' },
+      { no: 'Ch 37', title: 'Cheating Is Cheaper Than You Think', paper: 'Majority Is Not Enough: Bitcoin Mining Is Vulnerable — FC 2014' },
+    ],
+  },
+  {
+    act: 'Act III · Who Gets the Machine',
+    summary:
+      'The scarce thing stops being data and becomes the machine itself. A thousand tasks, a hundred boxes, and a decision every few milliseconds about which goes where — where the best-known result is that asking two machines instead of one is exponentially better than it sounds, and the best-known trick is making a task wait on purpose.',
+    next: 'Next: the oldest way of not doing work at all, and the ceiling on it that was computed in 1999.',
+    entries: [
+      { no: 'Ch 38', title: 'Ask Two, Not One', paper: 'The Power of Two Choices — IEEE TPDS 2001' },
+      { no: 'Ch 39', title: 'Wait, On Purpose', paper: 'Delay Scheduling — EuroSys 2010' },
+      { no: 'Ch 40', title: 'Nobody Schedules a Million Things', paper: 'Sparrow — SOSP 2013' },
+      { no: 'Ch 41', title: 'One Fleet, Two Kinds of Work', paper: 'Borg — EuroSys 2015' },
+    ],
+  },
+  {
+    act: 'Act IV · What a Cache Cannot Buy',
+    summary:
+      'Chapter 12 made a cache honest. This act asks the question that one did not: how much is a cache worth at all. The answer was computed in 1999, it is a ceiling rather than a curve, and almost nobody who builds one knows it exists.',
+    next: 'Next: the season on one page.',
+    entries: [
+      { no: 'Ch 42', title: 'The Ceiling Somebody Already Computed', paper: 'Cooperative Web Proxy Caching — SOSP 1999' },
+      { no: 'Ch 43', title: 'Decades of Cleverness, Beaten by a Queue', paper: 'FIFO Queues Are All You Need / SIEVE — SOSP 2023, NSDI 2024' },
+    ],
+  },
+  {
+    act: 'The Close · Season 3',
+    summary: 'What the three seasons add up to, and which of the assumptions you are still making.',
+    next: '',
+    entries: [{ no: '—', title: 'The Season, in One Page', interlude: true }],
+  },
+]
+
 export const SEASONS: Season[] = [
   {
     n: 1,
@@ -349,6 +425,12 @@ export const SEASONS: Season[] = [
     label: 'Season 2 · When the Data Stops Sitting Still',
     dek: 'Season 1 asked where data lives, and every answer assumed the data is at rest and a query comes to visit it. **This one turns that around: the query holds still and the data moves through it.** The thing being traded stops being consistency against availability and becomes *freshness* — against cost, against being right about events that arrive late, against how much state you are willing to keep hot. Most of the machinery is already in this book. It gets pointed the other way.',
     acts: SEASON_2_ACTS,
+  },
+  {
+    n: 3,
+    label: 'Season 3 · What Everything Else Assumed',
+    dek: 'The first two seasons argue about data, and both of them quietly assume that a broken machine has stopped and that the machine itself is free. **This one reads the papers underneath that assumption** — the proof that agreement is impossible, the definition of the middle ground that makes it possible anyway, what changes when a machine lies rather than dies, and what happens when the scarce thing is not the data but the box it runs on.',
+    acts: SEASON_3_ACTS,
   },
 ]
 

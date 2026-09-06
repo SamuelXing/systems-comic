@@ -24,7 +24,28 @@ be a writing queue. What is left is the cost calculator, one rejected experiment
 kept as a warning, and the question of which book starts next — which is the one
 that actually needs answering.
 
-### The papers book — finished, and what it cost to say so
+### The papers book — Season 3 is the map
+
+**Season 3 is up as a contents page**: thirteen chapters and a close, nothing
+written. The first two seasons argue about data, and both assume without
+arguing that a broken machine has *stopped* and that the machine itself is
+free. Season 3 reads the papers underneath that — FLP, Chandy-Lamport, partial
+synchrony, the Byzantine papers, and the scheduling and caching classics.
+
+It also closes a hole the adversarial pass found and did not fix. #84 caught
+Chapter 23 claiming six times that Chapter 7 covered Chandy-Lamport; the
+sentences were corrected and the absence stayed, because the algorithm is
+genuinely not in this book. FLP was missing on the same terms — two chapters
+about reaching consensus with no impossibility result underneath them.
+
+Source: the CS 525 reading list (UIUC, spring 2026). Compared paper by paper,
+**9 of the 82 papers it names are already chapters and 73 are not**, which is
+what made this worth doing as a season rather than as a duplicate. The 2025
+frontier is deliberately left alone — a paper from this year is a claim and a
+paper from 1985 is a fact — and the ML systems half stays book D's, which this
+file already assigns by name.
+
+### The papers book — Seasons 1 and 2, and what they cost to finish
 
 **31 chapters, both seasons, 30 papers plus a prologue that reads three more.**
 Season 1 is where data lives, Season 2 is what happens when it stops sitting still.
@@ -73,6 +94,97 @@ times that Chapter 7 covered Chandy-Lamport, and Chapter 7 is Lamport 1978, whic
 never mentions it. **Three of the eight are now guarded and the big one cannot be**,
 because catching it needs a model of what each chapter contains. That is the
 argument for doing this by hand on any book that ships from here.
+
+### Seasons 4 and 5 — candidates, not plans
+
+Recorded so the reasoning is not re-derived, and explicitly **not started**.
+The rule that follows from the Kubernetes book below, and from every stalled
+thing on this list: **no season starts until the previous one is written.**
+Season 3 is currently 0 of 13.
+
+Both come from themes the CS 525 list separates and this book has nothing from.
+Neither is about data, which is why they do not fit anywhere in Seasons 1–3.
+
+**Season 4 — the measurement season.** *Everything you have read so far is a
+claim. Here is what happened when somebody measured it.* Scalability! But at
+what COST? (2015), where one laptop beats the published cluster results — the
+site already cites it on the web deep-dive. File System Usage in Windows NT 4.0
+(1999), which is on the list for its method rather than its findings.
+Characterizing RocksDB Workloads at Facebook (2020): real workloads look
+nothing like any synthetic benchmark. Is Big Data Performance Reproducible in
+Modern Cloud Networks? (2020), where the answer is no, by enough to invalidate
+conclusions. This is the strongest candidate, because it is Chapter 17's line —
+*the arguments the field was having were not the arguments the operators were
+having* — with evidence, and because it is the book's own adversarial method
+turned on the field the book is about.
+
+**Season 5 — the gray failure season.** *It did not crash. It got slow, and
+then it got quietly wrong.* Software upgrade failures (2021), where the
+dangerous moment is the rolling upgrade with two versions live at once. Silent
+semantic violations (2022): the worst bugs raise nothing and return a wrong
+answer. Slow-fault tolerance (2025), where timeouts tuned for crashes handle a
+not-quite-dead node badly. Plus the verification thread — Anvil proving a
+controller eventually converges, Fawkes finding durability bugs by checking
+recovered state.
+
+This one is the natural sequel to Season 3's Act II: there a machine lies
+because somebody compromised it, here because it broke in a way nobody
+modelled. **The caveat is real and disqualifying until it is fixed:** its papers
+skew 2021–2025, which is the maintenance class this file refuses elsewhere. It
+needs an older floor — the gray-failure literature proper — before it is a
+season rather than a news roundup. Check that before committing, the same way
+the Kubernetes sources were checked.
+
+**What is deliberately not a season.** Chord, Kelips and SILT are Season 1 gaps
+and should be two chapters there, not a fifth act. The geo-transaction cluster
+(SNOW, Walter, Yesquel, Mencius) is half Spanner's territory already. And the
+ML systems half is book D's, which this file assigns by name.
+
+**On coverage, since it is the obvious temptation.** Of the 82 papers the CS 525
+overview names, 9 are already chapters and 13 are in the Season 3 map. After
+Season 3 the book will have read 22 of 82 — and the course lists 664. Coverage
+was never the goal and pursuing it turns the book into the syllabus, which
+already exists and is better at being one. A course is graded on breadth; a
+book is only worth reading if it has a spine.
+
+### Book three — Kubernetes, built as a map and rejected
+
+**Shipped as #88 and #89, closed unmerged.** Not a scoping problem and not a
+missing chapter. The premise did not survive contact with its own sources, and
+this is a record of what killed it rather than a plan to try again.
+
+The pitch — the one this file made — was that Kubernetes is unusual among
+infrastructure in having its *why* published, so the book inherits the
+papers-book method. Reading the three answer keys before writing anything:
+
+- **Three of the five Act I chapters read the same 24-page ACM Queue article.**
+  That is a magazine piece, not a peer-reviewed paper.
+- **The other two read Borg and Omega, which are not Kubernetes.** Using a paper
+  about a predecessor to explain a system is the sentence-level error #84 found
+  in book B, committed at the scale of an act.
+- **Nine of fourteen chapters had no paper at all.** The words "kubelet" and
+  "extensib" do not appear in that article.
+
+Strip the answer-key framing and what remains is a book about Kubernetes
+internals — a fine book, and not this site's, because the method here is read
+the primary source and design it yourself. Two further strikes: reading source
+is book F's format, and the boundary rule says three books arguing over one
+territory is how a shelf turns into a pile; and **Kubernetes moves**, so a book
+pinned to 2026 API machinery ages exactly the way a price list does, which is
+the maintenance class this file already refuses for the cost calculator.
+
+**The rule worth keeping, because it generalises to every book below: a book
+needs a primary source per chapter, or it is a different kind of book and has
+to say so before it starts.** The check is cheap — download the sources, grep
+them for the words the chapter list promises — and it costs a day rather than a
+season.
+
+What survives: the Terraform comparison. Kubernetes observes the world every
+loop; Terraform keeps a state file it believes; drift, `refresh`, `import` and
+state locking all fall out of that one difference, and so, in the other
+direction, does Kubernetes having no preview and no approval gate. That is an
+idea comic in book A. The planning notes and the three PDFs are in
+`notes/2026-08-18-kubernetes-book-plan.md`.
 
 ### A third calculator: cost
 
