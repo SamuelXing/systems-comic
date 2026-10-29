@@ -195,13 +195,16 @@ describe('the budget, spent end to end', () => {
   })
 
   it('a durable write at 90% utilization is 900 ms of queueing', () => {
-    // app 20 × 5 = 100 · store = fsync 300 µs = 0.3
-    // queue (100 + 0.3) × (10 − 1) = 902.7
+    // app 20 × 5 = 100 · store = durable write 50 µs = 0.05
+    // queue (100 + 0.05) × (10 − 1) = 900.45
+    // The store term is now rounding error next to the queue, which is the
+    // point the preset was built to make and is only more true on a 2026 disk:
+    // at 90% utilization the wait is the queue, not the device.
     const p = LPRESETS.find((x) => x.id === 'checkout')!
     const m = latency(vals(p.sets), p.req)
     expect(m.isWrite).toBe(true)
-    close(m.terms.find((t) => t.id === 'store')!.ms, 0.3)
-    close(m.terms.find((t) => t.id === 'queue')!.ms, 902.7)
+    close(m.terms.find((t) => t.id === 'store')!.ms, 0.05)
+    close(m.terms.find((t) => t.id === 'queue')!.ms, 900.45)
     expect(m.worst.id).toBe('queue')
   })
 
@@ -249,10 +252,10 @@ describe('inputs behave like the rest of the site', () => {
   })
 
   it('the hardware constants are the SAME objects the capacity page uses', () => {
-    // imported, not restated — so fsync can never mean 300 µs on one page
+    // imported, not restated — so a durable write can never mean 50 µs on one page
     // and something else on the other
     expect(LHW.map((h) => h.id)).toEqual(['cacheOp', 'randRead', 'fsync'])
-    expect(LHW.find((h) => h.id === 'fsync')!.val).toBe(300)
+    expect(LHW.find((h) => h.id === 'fsync')!.val).toBe(50)
     expect(LHW.find((h) => h.id === 'randRead')!.val).toBe(100)
   })
 })

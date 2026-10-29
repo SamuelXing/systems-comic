@@ -37,13 +37,23 @@ const READ_MS = 0.12 // core-ms per cached indexed read
 const WRITE_MS = 0.4 // core-ms per write incl. index maintenance
 const WAL_KB = 6 // WAL bytes per write, FPW amortized
 const RAM_USABLE = 0.85 // shared_buffers + OS cache share of RAM
-/* Commit durability, the ceiling cores cannot buy past. A commit is not
-   committed until fsync returns (300 µs, napkin-math); group commit lets a
-   batch of concurrent transactions share one fsync. Same derivation as the
-   capacity calculator: 8 ÷ 300 µs ≈ 27k commits/s. Without this row the
-   envelope implied a 96-core box could sustain 80k TPS on CPU alone — it
-   cannot, and no amount of CPU changes that. */
-const FSYNC_US = 300
+/* Commit durability. A commit is not committed until the WAL flush returns;
+   group commit lets a batch of concurrent transactions share one flush. Same
+   derivation as the capacity calculator: 8 ÷ 50 µs ≈ 160k commits/s.
+
+   This row was added because the envelope implied a 96-core box could sustain
+   80k TPS on CPU alone, and the disk said otherwise at 27k. napkin-math's
+   October 2026 pass moved the durable write from 300 µs to 50 µs — cloud SSDs
+   have no write cache to flush, so durability costs about what the write
+   costs — and the wall moved with it, from 27k to 160k. The row still binds
+   before CPU on the largest shape here (96 cores ÷ 0.4 ms = 240k/s), so it
+   stays, but it has stopped being the thing that ends the argument.
+
+   Every shape below the dev box is NVMe attached to the machine, which is the
+   disk this number describes. A managed Postgres on a network-attached volume
+   pays 1–2 ms for the same flush, which puts the ceiling back down around
+   4–8k/s — lower than it ever was here. The disk is the whole question. */
+const FSYNC_US = 50
 const GROUP_COMMIT = 8
 
 export default function HardwareEnvelope() {
@@ -70,7 +80,7 @@ export default function HardwareEnvelope() {
 
   const rows = [
     { label: 'CPU', used: cpuCores, cap: sh.cores, unit: 'cores', why: `R·${READ_MS} ms + W·${WRITE_MS} ms — parse, plan, execute, index maintenance` },
-    { label: 'Commit durability', used: writes, cap: commitCeiling, unit: '/s', why: `${GROUP_COMMIT} commits per fsync ÷ ${FSYNC_US} µs — the wall cores cannot buy past, because a commit waits on the disk, not the CPU` },
+    { label: 'Commit durability', used: writes, cap: commitCeiling, unit: '/s', why: `${GROUP_COMMIT} commits per WAL flush ÷ ${FSYNC_US} µs on local NVMe — a commit waits on the disk, not the CPU. On a network-attached volume the same flush is 1–2 ms and this ceiling drops roughly twentyfold` },
     { label: 'RAM vs working set', used: workset, cap: usableRAM, unit: 'GB', why: `working set vs ~${Math.round(RAM_USABLE * 100)}% of RAM (shared_buffers + OS cache). Past 100% every miss is a random disk read` },
     { label: 'Disk write', used: diskWrMBs, cap: sh.diskMBs, unit: 'MB/s', why: 'WAL now + checkpoint flush later ≈ 2.2× WAL bytes' },
     { label: 'Disk read (spill)', used: diskReadMBs, cap: sh.diskMBs, unit: 'MB/s', why: cached >= 1 ? 'zero — the working set fits in RAM' : `${fmt.compact(reads * (1 - cached))} misses/s × 8 KB random reads` },
@@ -103,7 +113,7 @@ export default function HardwareEnvelope() {
           }
         : {
             s: 'good',
-            t: `<b>Comfortable.</b> Binding resource: ${worst.label} at ${Math.round(worstPct)}%. Commit latency floor: one WAL fsync (~0.2 ms NVMe) — group commit batches concurrent sessions, so throughput scales even though each commit waits its turn.`
+            t: `<b>Comfortable.</b> Binding resource: ${worst.label} at ${Math.round(worstPct)}%. Commit latency floor: one WAL flush (~50 µs on local NVMe, 1–2 ms on a network volume) — group commit batches concurrent sessions, so throughput scales even though each commit waits its turn.`
           }
 
   return (

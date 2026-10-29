@@ -201,7 +201,7 @@ export default function LatencyCalculator() {
           <code>queue = work × (1 ÷ (1 − ρ) − 1)</code> ·{' '}
           <code>P(at least one slow) = 1 − (1 − p)ⁿ</code> ·{' '}
           <code>p99 of n needs one server’s 0.99^(1/n)</code>. The hardware constants are the same
-          objects the capacity page uses, imported rather than restated, so fsync cannot mean 300 µs on
+          objects the capacity page uses, imported rather than restated, so a durable write cannot mean 50 µs on
           one page and something else on the other. The single place a distribution is assumed rather
           than measured — the tail shape used to turn a fan-out percentile into milliseconds — is
           marked <span className="src-a">assumed</span> and shown with its formula.
@@ -446,8 +446,9 @@ export default function LatencyCalculator() {
                     Inside one datacenter the floor is <b>{DC_FLOOR_MS} ms</b>, not the wire
                   </td>
                   <td>
-                    napkin-math measures a round trip within one datacenter at <b>~500 µs</b>. At 1 km the
-                    wire itself is 0.01 ms, so switching, serialization and the kernel are the entire cost.
+                    At 1 km the wire itself is 0.01 ms, so none of this is the cable. napkin-math puts a
+                    same-zone network hop at <b>100 µs</b> and a database query at <b>500 µs</b> — this floor
+                    is the second one, because a call to another service is a hop plus whatever answers it.
                   </td>
                   <td className="ok">matches</td>
                 </tr>

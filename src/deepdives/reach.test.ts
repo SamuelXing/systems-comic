@@ -37,6 +37,26 @@ const WORKLOAD_AXES: Record<string, number[]> = {
   derived: [0, 1, 3],
 }
 
+/* Pairs, not just single knobs.
+
+   The sweep below moves ONE workload knob at a time away from the defaults,
+   and that was enough to reach every recommendation until the hardware
+   constants were re-based on napkin-math's October 2026 measurements. A 50 µs
+   durable write puts the write ceiling at 160,000/s instead of 26,667/s, and
+   nothing one slider can do from the defaults produces the 80,000 writes/s
+   that forces a log in front of the database — the biggest single-knob write
+   rate in the space is 52,083/s.
+
+   The log did not become unreachable in the product; it became unreachable in
+   a sweep that only ever moved one thing. A write-heavy workload is two knobs
+   (nobody reads, and everybody writes a lot), which is an ordinary shape and
+   not a corner. So the sweep carries a short list of combinations, and this is
+   the first one. */
+const COMBOS: Array<[string, Partial<Vals>]> = [
+  ['write-heavy: all writes, 200 actions', { readPct: 0, actions: 200 }],
+  ['write-heavy at scale: all writes, 500M DAU', { readPct: 0, dau: 5e8 }],
+]
+
 type Needs = Record<string, boolean>
 function sweep(): { needs: Needs; label: string }[] {
   const out: { needs: Needs; label: string }[] = []
@@ -59,6 +79,10 @@ function sweep(): { needs: Needs; label: string }[] {
       for (const val of vals)
         run({ fresh, txn: 'single', loss: 'keep', analytics: 'no', access: 'point', recency: 'stale', keyShape: 'monotonic' },
             { ...INIT, [key]: val }, `${fresh} + ${key}=${val}`)
+  for (const fresh of REQ_AXES.fresh)
+    for (const [label, over] of COMBOS)
+      run({ fresh, txn: 'single', loss: 'keep', analytics: 'no', access: 'point', recency: 'stale', keyShape: 'monotonic' },
+          { ...INIT, ...over } as Vals, `${fresh} + ${label}`)
   return out
 }
 

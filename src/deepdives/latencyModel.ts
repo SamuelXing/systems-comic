@@ -37,8 +37,16 @@ export const FIBRE_KM_PER_MS = 200
 export const FIBRE_EXACT_KM_PER_MS = C_KM_PER_S / FIBRE_INDEX / 1000
 
 /** Below a few kilometres the wire stops being the cost and switching,
- *  serialization and the kernel take over. napkin-math measures a round
- *  trip inside one datacenter at ~500 µs. */
+ *  serialization and the kernel take over.
+ *
+ *  This used to be attributed to a napkin-math round trip inside one
+ *  datacenter, and that was wrong in a way worth keeping a note about: napkin
+ *  puts a same-zone network round trip at 100 µs, and never said otherwise —
+ *  the 500 µs row it does publish is `Database Query (MySQL, Memcached,
+ *  Redis, …)`, which is a whole service call, not a hop. The value survives
+ *  the correction because this floor is what a call to another SERVICE costs,
+ *  not what the network costs: the hop is 100 µs and the thing answering it
+ *  is the rest. Keeping 0.5 ms means the budget never flatters a fan-out. */
 export const DC_FLOOR_MS = 0.5
 
 /** which path through the system you are budgeting */
@@ -64,7 +72,7 @@ export interface Geo extends Opt {
 export const GEO: Geo[] = [
   {
     id: 'dc', label: 'Same datacenter', km: 1, pair: 'one building',
-    info: 'Client and server in the same building. The wire is irrelevant at this distance; what you pay is switching and serialization, which napkin-math measures at about 500 µs round trip.',
+    info: 'Client and server in the same building. The wire is irrelevant at this distance — at 1 km it is 0.01 ms — so what you pay is the machine at the other end. napkin-math puts a same-zone network hop at 100 µs and a database query at 500 µs, and this floor is the second of those: by the time you have crossed a load balancer and asked a service a question, half a millisecond is gone and none of it was the cable.',
   },
   {
     id: 'metro', label: 'Same metro', km: 50, pair: 'a city and its suburbs',
