@@ -76,14 +76,16 @@ export default function PostgresPage() {
           <p className="h-kicker">Deep-dive · relational database</p>
           <h1 className="title">PostgreSQL</h1>
           <p className="lede">
-            Hand Postgres a change and it must not say <em>done</em> until that change will
-            survive a power cut. While it works, other people are reading the same rows, and
-            none of them may see half an update. Those two promises, durability and a
-            consistent view, are the whole product. Everything else on this page follows from
-            how Postgres chose to keep them: <b>a log written before the data</b> (the WAL),
-            and rows that are never overwritten (MVCC). The page walks the system in the order
-            you would want it explained. What one backend does with your UPDATE, what hardware
-            it eats, and only then how it scales.
+            This page looks at PostgreSQL as an example of a database that runs on a single
+            machine and makes two promises. The first is <em>durability</em>: once it has told
+            you that a transaction is committed, that transaction will not be lost, even if the
+            power fails a moment later. The second is <em>isolation</em>: while one transaction
+            is modifying a row, other transactions reading that row should not see a partially
+            applied change. Almost everything that is interesting about Postgres follows from
+            the particular way it keeps those two promises, namely a write-ahead log and
+            multi-version concurrency control. We will first follow a single UPDATE through one
+            backend process, then look at the hardware that path consumes, and only then turn
+            to replication and scaling.
           </p>
 
           <IdeaStrip
@@ -95,72 +97,110 @@ export default function PostgresPage() {
 
           <Ch id="abstraction" n={1} title="The core abstraction: the transaction">
             <p>
-              Start with the disk. It writes in blocks, and a power cut can land in the middle
-              of one. If Postgres wrote your change straight into the table page and the power
-              died halfway, the page would hold half the old row and half the new one, with no
-              record of which half was which. So the change is first written as a small
-              description, appended to a log, and fsync&apos;d. Only then is the transaction
-              committed. The page on disk is rewritten later, at leisure. If the machine dies
-              in between, recovery reads the log and redoes what the pages missed. That is the{' '}
-              <b>write-ahead log</b>, and it has a side effect bigger than crash safety: a
-              replica is just another machine replaying the same log, and a backup is just the
-              log, kept.
+              Let&apos;s start with durability. A disk is written in blocks of a few kilobytes,
+              and a power failure can occur at any moment, including halfway through writing a
+              block. Suppose Postgres wrote your change directly into the page of the table that
+              contains the row. If the power failed during that write, the page on disk would
+              contain some bytes from before the change and some from after it, and on restart
+              there would be no way of telling which were which. This is known as a{' '}
+              <em>torn page</em>.
             </p>
             <p>
-              Now the second promise. Someone is reading a row at the moment you update it. The
-              oldest answer is a lock: the reader waits until you are done. System R did that,
-              and so did the early commercial databases, and under a long report it brings writes
-              to a halt. The alternative is to keep the old version somewhere while the new one
-              lands. Oracle and InnoDB keep it in a separate undo area and overwrite the row in
-              place. Postgres keeps it <em>in the table</em>: the new version is written beside
-              the old, each stamped with the transaction that made it, and every reader decides
-              for itself which one it is allowed to see. Nobody waits. That design is{' '}
-              <b>multi-version concurrency control</b>, and its bill is the subject of Chapter 2.
-              Old versions pile up in the table, and a janitor called vacuum has to sweep them.
+              The approach Postgres takes, like most databases designed since the 1980s, is to
+              first append a compact description of the change to a sequential log file, and to
+              wait for that append to reach the disk (an <code>fsync</code>) before reporting the
+              transaction as committed. The table page itself is written to disk later, whenever
+              convenient. If the system crashes in between, recovery reads the log and reapplies
+              whatever the pages on disk are missing. This log is the <em>write-ahead log</em>{' '}
+              (WAL), and the rule that gives it its name is simply that the log record must reach
+              disk before the page does.
             </p>
             <p>
-              One more fact shapes the operational chapters. Each connection is served by its
-              own OS process. Threads were the alternative. The project chose processes in 1986,
-              when threads were neither portable nor safe, and kept them because a backend that
-              crashes takes only itself down. The price is that a connection costs megabytes
-              before it has done any work, so nearly every serious deployment puts a{' '}
-              <b>pooler</b> in front.
+              The WAL turns out to be useful for more than crash recovery. A replica is just
+              another machine that receives the same log and replays it against its own copy of
+              the files, and a backup is just an archived copy of the log together with a
+              snapshot of the files. We will see both in Chapter 5 and Chapter 7.
+            </p>
+            <p>
+              Now consider isolation. Suppose transaction A is in the middle of updating a row
+              when transaction B wants to read it. The simplest answer is to make B wait until A
+              has finished, by having A hold a lock on the row. That is how System R and the
+              early commercial databases worked. The trouble is that a long-running read, such as
+              a report that scans a large table, then blocks every write to the rows it touches
+              for as long as it runs.
+            </p>
+            <p>
+              The alternative is to keep the old version of the row available while the new one
+              is being written, so that B can read the old version without waiting. There are two
+              places one can keep it. Oracle and MySQL&apos;s InnoDB overwrite the row in place
+              and copy the previous version into a separate <em>undo</em> area, from which a
+              reader that needs it can reconstruct what it should see. Postgres instead leaves
+              the old version where it is and writes the new version alongside it, in the same
+              table, with each version carrying the ID of the transaction that created it and the
+              ID of the transaction that superseded it. Every reader then decides for itself, by
+              comparing those IDs with its own snapshot, which version it is allowed to see. This
+              technique is known as <em>multi-version concurrency control</em> (MVCC), and we
+              will look at it closely in Chapter 2.
+            </p>
+            <p>
+              Both choices have costs. With an undo area, a reader that needs an old version has
+              to follow a chain of undo records, and the undo area itself must be managed. With
+              Postgres&apos;s approach, reading the current version is cheap, but the table
+              gradually fills with versions that no transaction can see any more, and a separate
+              process, called <em>vacuum</em>, has to find and remove them. A great deal of what
+              goes wrong in production Postgres installations turns out to be some variation of
+              vacuum falling behind, which is why Chapter 6 spends so much time on it.
+            </p>
+            <p>
+              One further design decision affects the operational chapters. Postgres handles each
+              client connection in a separate operating system process rather than a thread. This
+              dates from 1986, when threads were not portable across Unix variants, and the
+              project kept it because a crash in one backend cannot corrupt the memory of
+              another. The downside is that each connection costs several megabytes of memory and
+              a scheduler entry even when idle, so a connection pooler such as PgBouncer is found
+              in front of almost every production deployment.
             </p>
             <div className="note">
-              <b>Sound familiar?</b> The WAL is the append-only log Kafka bet its entire design
-              on, pointed inward at 8 KB pages instead of outward at messages. Chapter 7 of the
-              Kafka deep-dive argues that the log is the one abstraction every distributed system
-              is built on. Postgres is the strongest single-machine evidence for it.
+              <b>A familiar idea.</b> The WAL is the same idea as the append-only log at the heart
+              of Kafka, applied to 8 KB pages rather than to messages. Chapter 7 of the Kafka
+              deep-dive argues that such a log is the fundamental abstraction of distributed data
+              systems; Postgres is a good example of the same idea on a single node.
             </div>
           </Ch>
 
           <Ch id="anatomy" n={2} title="Anatomy of the primary">
             <p>
-              A running Postgres is a family of OS processes sharing one block of memory. One
-              backend per connection does the query work. Around it run the chores it declined
-              to do while a client waited: the checkpointer, the WAL writer, autovacuum workers,
-              walsenders. Press play and follow one <code>UPDATE</code> from SQL text to the
-              fsync that makes it real:
+              A running Postgres server consists of a number of operating system processes that
+              share a region of memory. One process, called a <em>backend</em>, is dedicated to
+              each client connection and executes that client&apos;s queries. The remaining
+              processes perform maintenance work in the background: writing dirty pages to disk,
+              streaming the log to replicas, and so on. The following trace follows a single{' '}
+              <code>UPDATE</code> from the moment it arrives as text until the fsync that makes
+              it durable.
             </p>
             <TracePlayer spec={queryTrace} />
             <p>
-              The trace shows what an UPDATE does. The stranger thing is what it leaves behind.
-              Postgres never overwrites a live row, so the table fills with superseded versions,
-              and a background collector decides when each one may go. Of everything on this
-              page, this lifecycle is the one to understand before you carry a pager:
+              The trace above shows what happens while the UPDATE is running. What is perhaps
+              more surprising is what it leaves behind. Since Postgres does not overwrite rows in
+              place, every UPDATE leaves a superseded version in the table, and a background
+              process must later decide when that version can be removed. In our experience this
+              lifecycle is the single most important thing to understand about operating
+              Postgres, so the next trace follows one row through it.
             </p>
             <TracePlayer spec={mvccTrace} />
             <h3>The background cast</h3>
             <p>
-              Each background process exists because the query path refused to do that work
-              while a client waited. The <b>checkpointer</b> writes dirty pages to the data
-              files on a timer, so that crash recovery has a bounded stretch of log to replay.
-              The background writer trickles pages out ahead of demand, so a backend rarely has
-              to evict one itself. The WAL writer drains the WAL buffers between commits.
-              Autovacuum workers collect dead versions and freeze old ones. Walsenders stream the
-              log to replicas. The stats collector keeps the counts the planner&apos;s next guess
-              depends on. Any of these can fall behind, and when one does the symptom has a name.
-              Chapter 6 lists them.
+              Each of the background processes exists because some piece of work was taken out
+              of the path of client queries, so that clients would not have to wait for it. The{' '}
+              <em>checkpointer</em> periodically writes all dirty pages to the data files, which
+              bounds the amount of log that recovery has to replay after a crash. The{' '}
+              <em>background writer</em> writes out pages ahead of demand, so that a backend
+              seldom has to evict a page itself. The <em>WAL writer</em> flushes the WAL buffers
+              between commits. <em>Autovacuum</em> workers remove dead row versions and freeze old
+              ones. <em>WAL sender</em> processes stream the log to replicas. Finally, the{' '}
+              <em>statistics collector</em> maintains the counts on which the query
+              planner&apos;s estimates depend. Each of these can fall behind under load, and
+              Chapter 6 describes what that looks like in each case.
             </p>
           </Ch>
 
