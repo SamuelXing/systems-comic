@@ -76,14 +76,14 @@ export default function PostgresPage() {
           <p className="h-kicker">Deep-dive · relational database</p>
           <h1 className="title">PostgreSQL</h1>
           <p className="lede">
-            Postgres is built on two ideas that explain everything else about it. <b>Every change
-            is written to a log before it is real</b> — the WAL — so durability, crash recovery,
-            replication, and point-in-time restore are all the same operation: <em>replay the
-            log</em>. And <b>no reader ever sees a half-truth</b> — MVCC — achieved not with locks
-            but by keeping multiple versions of every row, which is where vacuum, bloat, and the
-            wraparound doomsday counter come from. This page walks the system the way you&apos;d
-            want it explained: <b>what one backend actually does with your UPDATE</b>, what
-            hardware it consumes, and only then how it scales.
+            Hand Postgres a change and it must not say <em>done</em> until that change will
+            survive a power cut. While it works, other people are reading the same rows, and
+            none of them may see half an update. Those two promises, durability and a
+            consistent view, are the whole product. Everything else on this page follows from
+            how Postgres chose to keep them: <b>a log written before the data</b> (the WAL),
+            and rows that are never overwritten (MVCC). The page walks the system in the order
+            you would want it explained. What one backend does with your UPDATE, what hardware
+            it eats, and only then how it scales.
           </p>
 
           <IdeaStrip
@@ -95,56 +95,72 @@ export default function PostgresPage() {
 
           <Ch id="abstraction" n={1} title="The core abstraction: the transaction">
             <p>
-              Postgres&apos;s product is not storage — it&apos;s a <b>guarantee</b>: a transaction
-              either happened entirely or not at all, and once committed it survives anything.
-              That guarantee is manufactured by two machines running in tandem. The{' '}
-              <b>write-ahead log</b> makes changes durable the instant a description of them is
-              fsync&apos;d — long before the actual data pages reach disk. And{' '}
-              <b>multi-version concurrency control</b> gives every transaction a private,
-              frozen-in-time snapshot: writers create new row versions instead of overwriting, so
-              readers never wait on writers and writers never wait on readers.
+              Start with the disk. It writes in blocks, and a power cut can land in the middle
+              of one. If Postgres wrote your change straight into the table page and the power
+              died halfway, the page would hold half the old row and half the new one, with no
+              record of which half was which. So the change is first written as a small
+              description, appended to a log, and fsync&apos;d. Only then is the transaction
+              committed. The page on disk is rewritten later, at leisure. If the machine dies
+              in between, recovery reads the log and redoes what the pages missed. That is the{' '}
+              <b>write-ahead log</b>, and it has a side effect bigger than crash safety: a
+              replica is just another machine replaying the same log, and a backup is just the
+              log, kept.
             </p>
             <p>
-              Both machines have famous consequences. Because the log is the truth, a replica is
-              just a process replaying it, and a backup is just the log archived — one mechanism,
-              many features. Because versions accumulate, someone must collect the superseded
-              ones — <b>vacuum</b> — and a whole family of production incidents is really
-              &ldquo;the collector fell behind.&rdquo; The third structural fact is smaller but
-              shapes everything operational: <b>one connection = one OS process</b>, which makes
-              connections expensive and puts a pooler in front of nearly every serious deployment.
+              Now the second promise. Someone is reading a row at the moment you update it. The
+              oldest answer is a lock: the reader waits until you are done. System R did that,
+              and so did the early commercial databases, and under a long report it brings writes
+              to a halt. The alternative is to keep the old version somewhere while the new one
+              lands. Oracle and InnoDB keep it in a separate undo area and overwrite the row in
+              place. Postgres keeps it <em>in the table</em>: the new version is written beside
+              the old, each stamped with the transaction that made it, and every reader decides
+              for itself which one it is allowed to see. Nobody waits. That design is{' '}
+              <b>multi-version concurrency control</b>, and its bill is the subject of Chapter 2.
+              Old versions pile up in the table, and a janitor called vacuum has to sweep them.
+            </p>
+            <p>
+              One more fact shapes the operational chapters. Each connection is served by its
+              own OS process. Threads were the alternative. The project chose processes in 1986,
+              when threads were neither portable nor safe, and kept them because a backend that
+              crashes takes only itself down. The price is that a connection costs megabytes
+              before it has done any work, so nearly every serious deployment puts a{' '}
+              <b>pooler</b> in front.
             </p>
             <div className="note">
-              <b>Sound familiar?</b> The WAL is the same append-only-log idea Kafka bet its entire
-              design on — pointed inward at 8 KB pages instead of outward at messages. Chapter 7
-              of the Kafka deep-dive argues the log is <em>the</em> unifying abstraction of
-              distributed systems; Postgres is the strongest single-node evidence for it.
+              <b>Sound familiar?</b> The WAL is the append-only log Kafka bet its entire design
+              on, pointed inward at 8 KB pages instead of outward at messages. Chapter 7 of the
+              Kafka deep-dive argues that the log is the one abstraction every distributed system
+              is built on. Postgres is the strongest single-machine evidence for it.
             </div>
           </Ch>
 
           <Ch id="anatomy" n={2} title="Anatomy of the primary">
             <p>
-              A running Postgres is a family of processes around shared memory: one backend per
-              connection doing query work, plus the background cast — checkpointer, WAL writer,
-              autovacuum workers, walsenders. Press play and follow one <code>UPDATE</code> from
-              SQL text to the fsync that makes it real:
+              A running Postgres is a family of OS processes sharing one block of memory. One
+              backend per connection does the query work. Around it run the chores it declined
+              to do while a client waited: the checkpointer, the WAL writer, autovacuum workers,
+              walsenders. Press play and follow one <code>UPDATE</code> from SQL text to the
+              fsync that makes it real:
             </p>
             <TracePlayer spec={queryTrace} />
             <p>
-              The trace above hides the strangest part: what an UPDATE leaves <em>behind</em>.
-              Postgres never overwrites a live row — which means the table quietly fills with
-              superseded versions, and a background collector decides their fate. This lifecycle
-              is the single most operationally important thing to understand about Postgres:
+              The trace shows what an UPDATE does. The stranger thing is what it leaves behind.
+              Postgres never overwrites a live row, so the table fills with superseded versions,
+              and a background collector decides when each one may go. Of everything on this
+              page, this lifecycle is the one to understand before you carry a pager:
             </p>
             <TracePlayer spec={mvccTrace} />
             <h3>The background cast</h3>
             <p>
-              Around the query path run the maintenance loops: the <b>checkpointer</b> flushes
-              dirty pages on a timer so crash recovery stays bounded; the <b>background writer</b>{' '}
-              trickles pages out so backends rarely wait on eviction; the <b>WAL writer</b> drains
-              the WAL buffers between commits; <b>autovacuum workers</b> collect dead versions and
-              freeze old ones; <b>walsenders</b> stream the log to replicas; and the{' '}
-              <b>stats collector</b> feeds the planner the numbers its next gamble depends on.
-              Every one of these has a failure mode that appears by name in Chapter 6.
+              Each background process exists because the query path refused to do that work
+              while a client waited. The <b>checkpointer</b> writes dirty pages to the data
+              files on a timer, so that crash recovery has a bounded stretch of log to replay.
+              The background writer trickles pages out ahead of demand, so a backend rarely has
+              to evict one itself. The WAL writer drains the WAL buffers between commits.
+              Autovacuum workers collect dead versions and freeze old ones. Walsenders stream the
+              log to replicas. The stats collector keeps the counts the planner&apos;s next guess
+              depends on. Any of these can fall behind, and when one does the symptom has a name.
+              Chapter 6 lists them.
             </p>
           </Ch>
 

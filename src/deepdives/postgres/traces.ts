@@ -35,7 +35,7 @@ export const queryTrace: TraceSpec = {
     {
       title: 'One connection = one process',
       prose:
-        'The postmaster <b>forks a dedicated OS process</b> for every connection — no thread pool, no event loop. Each backend costs megabytes (plus <code>work_mem</code> per sort or hash) and its own scheduler slot, which is why raw connections are precious and <b>PgBouncer</b> in transaction mode — multiplexing thousands of app connections onto a few dozen real backends — is standard kit, not an optimization.',
+        'Postgres answers every connection with a whole OS process. The postmaster forks one, and it is yours until you disconnect. The design dates from 1986, when threads were not portable, and it stuck because a backend that crashes takes down only itself. The cost is real. A backend holds a few megabytes before it has done any work, plus <code>work_mem</code> for every sort and hash, plus a slot in the kernel scheduler. A thousand idle connections is a thousand processes. So nearly every production deployment puts <b>PgBouncer</b> in front, which lends a few dozen real backends to thousands of app connections, one transaction at a time.',
       focus: ['app', 'pool'],
       particles: [
         { from: 'app', to: 'pool', color: C.client },
@@ -45,56 +45,56 @@ export const queryTrace: TraceSpec = {
     {
       title: 'Parse and rewrite',
       prose:
-        'The parser turns SQL text into a parse tree; the analyzer resolves every name against the <b>system catalogs</b> (your schema is itself stored in tables); the rewriter expands views and rules. Nothing here touches your data — but it does touch the catalogs, which is why even trivial queries benefit from the catalog caches each backend keeps warm (and why brand-new connections are slower than pooled ones).',
+        'The parser turns the SQL text into a tree. The analyzer then has to find out what <code>accounts</code> and <code>balance</code> are, and the answer lives in the <b>system catalogs</b>, which are themselves ordinary tables. The rewriter expands views and rules on the way through. None of this touches your data. It does touch the catalogs, so each backend keeps a cache of them, which is one more reason a fresh connection is slower than a pooled one that has been warm for an hour.',
       focus: ['parser'],
       particles: [{ from: 'parser', to: 'planner', color: C.machine }],
     },
     {
       title: 'Plan — the cost-based gamble',
       prose:
-        'The planner enumerates ways to run the query — sequential scan vs index scan, join orders, join algorithms — and prices each using <b>statistics gathered by ANALYZE</b>: row counts, value histograms, correlation. It picks the cheapest <em>estimate</em>. This is the system’s biggest bet: stale or unrepresentative stats mean a confidently wrong plan, which is how a query that ran in 2 ms all year suddenly takes 40 seconds at 3am (the “plan flip” in Chapter 8).',
+        'There are many ways to run one query: scan the whole table or walk an index, join in this order or that, hash or merge or nested loop. The planner cannot try them all, so it prices them. The prices come from statistics that <code>ANALYZE</code> gathered earlier: row counts, histograms of values, how well the physical order matches the key. It picks the cheapest <em>estimate</em>, and everything downstream trusts that guess. When the statistics go stale the planner is confidently wrong, and a query that took 2 ms all year takes 40 seconds one night. Chapter 8 calls that the <b>plan flip</b>.',
       focus: ['planner'],
       particles: [{ from: 'planner', to: 'exec', color: C.machine }],
     },
     {
       title: 'Execute — walk the index to the heap',
       prose:
-        'The executor runs the plan as a tree of iterators, each node pulling rows from its children. For our UPDATE it descends the <b>B-tree index</b> to a heap page address, then asks the <b>buffer manager</b> for that 8 KB page. Hit in <code>shared_buffers</code> → nanoseconds. Miss → read from the OS page cache or disk and evict a victim via clock-sweep. Postgres deliberately caches <em>twice</em> — shared buffers + OS cache — which is why <code>shared_buffers</code> is set to ~25% of RAM, not all of it.',
+        'The executor runs the plan as a tree of iterators, each node asking its children for the next row. For our UPDATE that means descending the B-tree index to a heap address, then asking the buffer manager for that 8 KB page. If the page is in <code>shared_buffers</code>, the lookup costs nanoseconds. If not, it comes from the OS page cache or from disk, and some other page is evicted to make room. Postgres leans on the OS cache on purpose, which is why <b>shared_buffers</b> is set near a quarter of RAM rather than all of it. Any higher and the same page is cached twice, and the OS knows better what else the machine needs the memory for.',
       focus: ['exec', 'shbuf'],
       particles: [{ from: 'exec', to: 'shbuf', color: C.buf }],
     },
     {
       title: 'MVCC: an UPDATE never updates',
       prose:
-        'Here is Postgres’s deepest design decision: the old row is <b>not overwritten</b>. A brand-new row version is inserted (stamped <code>xmin</code> = our transaction ID) and the old version is stamped <code>xmax</code> — “superseded by 205.” Both versions now coexist on disk. Readers holding older snapshots keep seeing the old version, <b>without taking any lock</b>. The price: every UPDATE is physically an INSERT plus a deferred delete someone must clean up later — vacuum debt, the subject of the next trace.',
+        'Now the choice that shapes the whole system. A reader may be looking at this row right now. Overwrite it in place and that reader sees half an old row and half a new one. Postgres could make the reader wait for a lock, as the first relational databases did. Or it could keep the old version somewhere. It keeps the old version <em>right where it is</em>: a second copy of the row is written beside it, stamped <code>xmin</code> = our transaction id, and the old copy is stamped <code>xmax</code> = our id, meaning “superseded by 205.” Both now sit on disk. A reader with an older snapshot keeps the old one and never takes a lock. The bill: every UPDATE is physically an insert plus a delete that <b>someone else must finish</b>. That someone is vacuum, and the next trace is about it.',
       focus: ['exec', 'shbuf'],
       particles: [{ from: 'exec', to: 'shbuf', color: C.vac, count: 2 }],
     },
     {
       title: 'WAL first — always',
       prose:
-        'Before the dirtied page can ever reach disk, the change is described as a <b>redo record</b> in the WAL buffers: “page X, offset Y, these bytes.” This is the <em>write-ahead</em> rule — the log is the truth, the data files are a lagging cache of it. Sound familiar? It is Kafka’s append-only log turned inward: same idea, pointed at pages instead of messages.',
+        'Before the dirtied page can go anywhere near the disk, the change is written as a <b>redo record</b> into the WAL buffers: “page X, offset Y, these bytes.” That order is the rule the name describes. Write the description first, the page later. The reason is in the disk itself: a page is 8 KB, a power cut can land mid-write, and a half-written page tells you nothing about what it used to hold. A log entry is small, appended, and either present or not. The log is the truth and the data files are a lagging copy of it. Kafka built a whole system on the same idea, aimed outward at messages instead of inward at pages.',
       focus: ['exec', 'walbuf'],
       particles: [{ from: 'exec', to: 'walbuf', color: C.wal }],
     },
     {
       title: 'COMMIT = one sequential fsync',
       prose:
-        'At COMMIT, the WAL buffers are flushed and <b>fsync’d to <code>pg_wal</code></b> — the only synchronous disk write in the entire path. Commit latency <em>is</em> WAL-flush latency: ~0.1–0.3 ms on NVMe, ~10 ms on spinning rust. Concurrent commits piggyback on one flush (<b>group commit</b>), so throughput scales even though each commit waits. The transaction is now durable — even though the heap page it changed exists only in memory.',
+        'At COMMIT the WAL buffers are flushed and fsync’d to <code>pg_wal</code>. This is the only disk write in the whole path that anything waits for. Commit latency is therefore WAL flush latency: around 50 µs on a local NVMe, a millisecond or two on a cloud network volume, ten on a spinning disk. Commits that arrive together share one flush, which the code calls <b>group commit</b>, so throughput grows even though every commit waits. The transaction is now durable. The heap page it changed still exists only in memory.',
       focus: ['walbuf', 'waldisk'],
       particles: [{ from: 'walbuf', to: 'waldisk', color: C.wal }],
     },
     {
       title: 'The WAL fans out',
       prose:
-        'The same bytes just fsync’d are streamed by <b>walsender</b> processes to every replica, which replay them against their own copies — replicas are not “kept in sync,” they simply <em>re-run the log</em>. Asynchronous by default (milliseconds behind); list a standby in <code>synchronous_standby_names</code> and COMMIT also waits for its ack — zero data loss on failover, one network RTT added to every write.',
+        'The bytes just fsync’d are streamed by walsender processes to every replica. A replica is not kept in sync by some separate protocol. It simply <em>runs the same log</em>, a little later, against its own copy of the files. By default that is asynchronous and the replica trails by milliseconds. Put a standby in <code>synchronous_standby_names</code> and COMMIT also waits for its acknowledgement, which buys zero data loss on failover at the price of one network round trip on every write.',
       focus: ['waldisk', 'repl'],
       particles: [{ from: 'waldisk', to: 'repl', color: C.wal, via: [{ x: 74.5, y: 38.75 }, { x: 74.5, y: 12 }] }],
     },
     {
       title: 'Ack — and the debt left behind',
       prose:
-        'The client gets its COMMIT ack: total synchronous cost, <b>one sequential fsync</b>. The dirty heap and index pages stay in shared buffers until the <b>checkpointer</b> writes them out (spread over minutes, by design). Crash before then? Recovery replays the WAL from the last checkpoint and reconstructs every page. Corollary: the first change to each page after a checkpoint logs the <em>entire 8 KB page</em> into the WAL (torn-page protection) — which is why write volume spikes right after every checkpoint.',
+        'The client gets its COMMIT. The synchronous cost of the whole trip was one sequential fsync. The dirty heap and index pages stay in shared buffers until the <b>checkpointer</b> writes them out, spread over minutes on purpose so the disk never sees a burst. If the machine dies before then, recovery replays the WAL from the last checkpoint and rebuilds every page. One consequence worth knowing: the first change to each page after a checkpoint copies the entire 8 KB page into the WAL, so a torn page can be rebuilt from scratch. That is why WAL volume jumps right after every checkpoint.',
       focus: ['shbuf', 'heap', 'app'],
       particles: [
         { from: 'shbuf', to: 'heap', color: C.buf },
@@ -127,21 +127,21 @@ export const mvccTrace: TraceSpec = {
     {
       title: 'A row is born',
       prose:
-        'Transaction 100 INSERTs the row: a tuple lands on a heap page stamped <code>xmin&nbsp;100</code> — “created by 100.” Whether any given transaction can <em>see</em> it is decided later, at read time, by comparing these stamps against the reader’s snapshot and the commit log (<code>pg_xact</code>). Visibility is not stored anywhere; it is <b>computed on every read</b>.',
+        'Transaction 100 inserts the row. A tuple lands on a heap page stamped <code>xmin&nbsp;100</code>, “created by 100.” Nothing on the page says who is allowed to see it. That question is answered later, at read time, by comparing the stamps against the reader’s snapshot and the commit log in <code>pg_xact</code>. Visibility is <b>computed on every read</b>, never stored.',
       focus: ['wtx', 'v1'],
       particles: [{ from: 'wtx', to: 'v1', color: C.client }],
     },
     {
       title: 'A reader takes a snapshot',
       prose:
-        'A reader starts and receives a <b>snapshot</b>: which transaction IDs were committed at that instant. From now on it sees the database exactly as of that moment — no read locks, no blocking, regardless of what writers do. This is the MVCC bargain: readers never block writers, writers never block readers; the currency it is paid in is old row versions.',
+        'A reader starts and is handed a <b>snapshot</b>: the set of transaction ids that had committed at that instant. From now on it sees the database as of that moment, whatever writers do, and it holds no lock to get that. Readers never block writers and writers never block readers. What pays for it is the old row versions, which have to stay on disk as long as any snapshot might still want them.',
       focus: ['rtx', 'v1'],
       particles: [{ from: 'rtx', to: 'v1', color: C.client, via: [{ x: 25, y: 31.25 }, { x: 25, y: 12.5 }] }],
     },
     {
       title: 'UPDATE = insert a rival version',
       prose:
-        'Transaction 205 updates the row. <b>Version 2</b> is inserted elsewhere on the page (<code>xmin 205</code>), Version 1 is stamped <code>xmax 205</code>, and — if an <em>indexed</em> column changed — every index on the table gets a new entry pointing at the new version. One logical UPDATE: a heap insert plus N index inserts. This is the write amplification Uber’s famous critique centered on.',
+        'Transaction 205 updates the row. <b>Version 2</b> goes elsewhere on the page with <code>xmin 205</code>. Version 1 gets <code>xmax 205</code>. If an <em>indexed</em> column changed, every index on the table needs a new entry pointing at Version 2, because an index points at a physical location and the new version lives at a new one. One logical UPDATE became a heap insert plus N index inserts. Uber’s critique of Postgres, linked in Chapter 9, is mostly about this multiplication.',
       focus: ['wtx', 'v2', 'idx'],
       particles: [
         { from: 'wtx', to: 'v2', color: C.vac, via: [{ x: 12.5, y: 2 }, { x: 60, y: 2 }] },
@@ -151,20 +151,20 @@ export const mvccTrace: TraceSpec = {
     {
       title: 'Two truths at once',
       prose:
-        'Both versions now live on the page. Our reader’s snapshot predates 205, so it still resolves to <b>Version 1</b>; any transaction starting now resolves to <b>Version 2</b>. Both are simply <em>correct answers to different questions</em> (“as of when?”). This is why a long <code>pg_dump</code> or analytics query runs happily against a busy OLTP database — and, as the next step shows, why it isn’t free.',
+        'Both versions are on the page. Our reader’s snapshot predates 205, so it resolves to <b>Version 1</b>. A transaction that starts now resolves to Version 2. Neither is wrong. They answer different questions: <em>as of when?</em> This is what lets a long <code>pg_dump</code> or an hour-long report run against a busy OLTP database without anyone waiting. The next step is the bill for it.',
       focus: ['v1', 'v2', 'rtx'],
       particles: [{ from: 'rtx', to: 'v1', color: C.client, via: [{ x: 25, y: 31.25 }, { x: 25, y: 12.5 }] }],
     },
     {
       title: 'The dead pile up',
       prose:
-        'Once no live snapshot can see Version 1, it is <b>dead</b> — pure waste, still occupying page space and index entries. Nothing reclaims it inline; deletes and updates only ever <em>add</em>. And the reclaim horizon is set by the <b>oldest snapshot in the system</b> (the “xmin horizon”): one forgotten <code>BEGIN</code> sitting idle pins dead versions <em>across the entire cluster</em>. Remember that — it is the root cause of the Chapter 6 cascade.',
+        'Once no live snapshot can still see Version 1, it is <b>dead</b>. It still occupies page space and index entries, and nothing reclaims it inline, because deletes and updates only ever add. How far back the cleanup may reach is set by the oldest snapshot in the whole system, the <em>xmin horizon</em>. One session that ran <code>BEGIN</code> and then went idle pins dead versions in every table on the cluster. Hold onto that. It is the root of the cascade in Chapter 6.',
       focus: ['v1', 'rtx'],
     },
     {
       title: 'HOT — the mercy optimization',
       prose:
-        'If <b>no indexed column changed</b> and the page has room, Postgres performs a <b>Heap-Only Tuple</b> update: Version 2 goes on the <em>same page</em>, chained from Version 1, and the indexes are untouched — they still point at the original line pointer, and readers walk the chain. This is why tables are created with <code>fillfactor</code> headroom, and why “don’t index columns you update constantly” is a real design rule, not folklore.',
+        'There is a mercy case. If no indexed column changed and the page has room, Postgres does a <b>Heap-Only Tuple</b> update: Version 2 goes on the <em>same page</em>, chained from Version 1, and no index is touched. The indexes still point at the original line pointer, and a reader follows the chain. That is why tables are created with <code>fillfactor</code> headroom, and why “don’t index a column you update constantly” is a design rule rather than folklore.',
       focus: ['lp', 'v1', 'v2'],
       particles: [
         { from: 'lp', to: 'v1', color: C.machine },
@@ -174,7 +174,7 @@ export const mvccTrace: TraceSpec = {
     {
       title: 'Autovacuum sweeps',
       prose:
-        'Autovacuum workers wake when a table’s dead-tuple count crosses a threshold. A worker scans (cost-limited, so it doesn’t flatten your I/O), removes dead versions and their index entries, records the reclaimed room in the <b>free space map</b>, and marks fully-clean pages <em>all-visible</em> in the <b>visibility map</b> — which is what makes index-only scans possible. Note what it does not do: the file rarely shrinks. Space is recycled, not returned.',
+        'Autovacuum workers wake when a table’s dead-tuple count crosses a threshold. A worker scans the table, throttled so it does not flatten your I/O, removes dead versions and their index entries, records the freed room in the <b>free space map</b>, and marks pages with no dead tuples as all-visible in the visibility map, which is what makes index-only scans possible. Notice what it does not do. The file almost never shrinks. Space is recycled for the next insert, not handed back to the OS.',
       focus: ['av', 'v1', 'vm', 'free'],
       particles: [
         { from: 'av', to: 'v1', color: C.vac, via: [{ x: 74, y: 19 }, { x: 48.75, y: 19 }] },
@@ -184,7 +184,7 @@ export const mvccTrace: TraceSpec = {
     {
       title: 'The doomsday counter',
       prose:
-        'Transaction IDs are <b>32-bit</b>, compared in a circle: to xid 3 billion, xid 100 looks like the <em>future</em>, so unfrozen old rows would suddenly vanish. Vacuum prevents this by <b>freezing</b> old tuples (marking them “visible to everyone, forever”). If freezing falls ~2 billion transactions behind, Postgres first warns, then <b>refuses new writes ~3 million short of wraparound</b> to protect your data. Every serious Postgres shop monitors <code>age(datfrozenxid)</code>. Chapter 6 shows the alert.',
+        'Transaction ids are <b>32-bit</b> and compared in a circle. To transaction 3 billion, transaction 100 looks like the <em>future</em>, so an old row never touched again would one day vanish from every query. Vacuum prevents this by freezing old tuples, which marks them visible to everyone, forever. If freezing falls about 2 billion transactions behind, Postgres warns, and roughly 3 million short of the wrap it refuses new writes rather than lose your data. Every serious shop watches <code>age(datfrozenxid)</code>. Chapter 6 shows the alert.',
       focus: ['av'],
       particles: [{ from: 'av', to: 'v2', color: C.vac }],
     },
