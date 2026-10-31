@@ -57,8 +57,8 @@ describe('ceilings are one division each', () => {
   const m = model(vals(), req())
 
   it('durable writes = commits per fsync ÷ fsync latency', () => {
-    // 8 ÷ 300e-6 s = 26,666.67/s
-    close(m.writeCeiling, 26666.667)
+    // 8 ÷ 50e-6 s = 160,000/s
+    close(m.writeCeiling, 160000)
   })
   it('random reads = queue depth ÷ read latency', () => {
     // 8 ÷ 100e-6 s = 80,000/s
@@ -69,8 +69,8 @@ describe('ceilings are one division each', () => {
     close(m.cacheCeiling, 100000)
   })
   it('full scan = stored bytes ÷ sequential read rate', () => {
-    // 1.10592e14 B ÷ (8 × 2^30 = 8.58993e9 B/s) = 12,874.6 s (~3.6 h)
-    close(m.scanSeconds, 12874.6)
+    // 1.10592e14 B ÷ (4 × 2^30 = 4.294967e9 B/s) = 25,749.2 s (~7.2 h)
+    close(m.scanSeconds, 25749.2)
   })
   it('RAM feasibility = stored bytes ÷ RAM per node', () => {
     // 1.10592e14 ÷ (128 × 2^30 = 1.37439e11) = 804.66 → ceil 805 hosts
@@ -130,8 +130,8 @@ describe('engine: each column is judged on the load that REACHES it', () => {
     expect(bt.colCache).toBe(true)
     // misses only: 34,722.22 × 10% = 3,472.22 → 3,472.22 ÷ 80,000 = 4.34%
     close(bt.rU, 0.043403)
-    // write stream: 5,208.33 × 2,048 × 3 = 32.0e6 B/s ÷ 3×2^30 = 0.993%
-    close(bt.bwU, 0.0099341)
+    // write stream: 5,208.33 × 2,048 × 3 = 32.0e6 B/s ÷ 2×2^30 = 1.49%
+    close(bt.bwU, 0.0149012)
     close(bt.worst, 0.043403)
     // LSM: ×2 amp → misses 3,472.22 × 2 ÷ 80,000 = 8.68%; worst 8.68% → B-tree wins
     close(ls.rU, 0.086806)
@@ -142,27 +142,64 @@ describe('engine: each column is judged on the load that REACHES it', () => {
     // 500M × 50/day = 2.5e10; peak ×3 = 868,055.6/s; 10% reads → 781,250 writes/s
     const m = model(vals({ dau: 5e8, actions: 50, readPct: 10, fanout: 0 }), req())
     close(m.peakWrites, 781250)
-    // writeUtil = 781,250 ÷ 26,666.67 = 29.3 → the log is forced (peak ×3 ≥ 2)
+    // writeUtil = 781,250 ÷ 160,000 = 4.88 → the log is forced (peak ×3 ≥ 2)
     expect(m.logNeed).toBe(true)
     // behind the log: 781,250 ÷ 3 = 260,416.7/s sustained
     close(m.dbWrites, 260416.67)
     const bt = m.eCols.find((c) => c.id === 'sql')!
     const ls = m.eCols.find((c) => c.id === 'wide')!
-    // B-tree write stream: 260,416.7 × 2,048 × 3 = 1.6e9 B/s ÷ 3.2212e9 = 49.7%
-    close(bt.bwU, 0.49671)
+    // B-tree write stream: 260,416.7 × 2,048 × 3 = 1.6e9 B/s ÷ 2.1475e9 = 74.5%
+    close(bt.bwU, 0.745058)
     expect(bt.worstName).toBe('the write stream')
-    // LSM: bw 16.6%; reads 86,805.6 → raw 217% → cache → 8,680.6 × 2 ÷ 80,000 = 21.7%
+    // LSM: bw 24.8%; reads 86,805.6 → raw 217% → cache → 8,680.6 × 2 ÷ 80,000 = 21.7%
     close(ls.rU, 0.21701)
-    close(ls.worst, 0.21701)
-    // 21.7% < 49.7% → LSM wins, for the right reason
+    close(ls.worst, 0.24835)
+    // 24.8% < 74.5% → LSM wins, for the right reason
     expect(m.engineWin).toBe('wide')
   })
 
-  it('moderate ingest honestly stays on the B-tree — one primary behind a log handles it', () => {
-    // 50M × 20/day, 10% reads, 5 KB writes: writes 31,250/s peak → 10,416.7 sustained
+  it('moderate ingest loses the log on a fast disk, and the B-tree loses with it', () => {
+    /* This case used to end on the B-tree, and the reason it no longer does is
+       worth keeping, because it is counterintuitive: a FASTER disk is what
+       moved it.
+
+       napkin-math's October 2026 pass put a durable write at 50 µs instead of
+       300 µs, which lifts the write ceiling from 26,667/s to 160,000/s. A 3×
+       peak of 31,250 writes/s used to sit above that ceiling and force a log
+       in front of the database; now it sits a long way under, so no log is
+       forced — and without one the database absorbs the raw peak instead of
+       the smoothed average. 31,250/s rather than 10,416.7/s, three times the
+       bytes, and the B-tree's ×3 write amplification is what pays for it.
+
+       So the chain is: faster disk → higher ceiling → no log → no smoothing →
+       amplification starts to matter. The engine recommendation is downstream
+       of a hardware constant two steps away from it, which is exactly the kind
+       of thing this file exists to pin. */
+    // 50M × 20/day, 10% reads, 5 KB writes: 31,250/s peak, and now unsmoothed
     const m = model(vals({ readPct: 10, fanout: 0, writeSize: 5 }), req())
-    // B-tree bw: 10,416.7 × 5,120 × 3 = 1.6e8 ÷ 3.2212e9 = 4.97%; reads 3,472.2 ÷ 80k = 4.34%
-    // worst 4.97% vs LSM worst = reads ×2 = 8.68% → relational
+    expect(m.logNeed).toBe(false)
+    close(m.dbWrites, 31250)
+    // B-tree bw: 31,250 × 5,120 × 3 = 4.8e8 ÷ 2.1475e9 = 22.35%; reads 3,472.2 ÷ 80k = 4.34%
+    const bt = m.eCols.find((c) => c.id === 'sql')!
+    close(bt.bwU, 0.223517)
+    close(bt.worst, 0.223517)
+    // LSM worst is still its read amplification: 3,472.2 × 2 ÷ 80,000 = 8.68%
+    const ls = m.eCols.find((c) => c.id === 'wide')!
+    close(ls.worst, 0.086806)
+    // 8.68% < 22.35% → the wide-column engine, on headroom rather than on a wall
+    expect(m.engineWin).toBe('wide')
+  })
+
+  it('and it goes back to the B-tree on the disk that measurement came from', () => {
+    /* The control for the test above: same workload, durable write dialled to
+       the 300 µs that a 2020-era SSD actually cost. The log comes back, the
+       peak is smoothed, and the B-tree wins again — which shows the flip is
+       the constant moving rather than the engine logic changing under it. */
+    const m = model(vals({ readPct: 10, fanout: 0, writeSize: 5, fsync: 300 }), req())
+    expect(m.logNeed).toBe(true)
+    close(m.dbWrites, 10416.667)
+    // B-tree bw: 10,416.7 × 5,120 × 3 = 1.6e8 ÷ 2.1475e9 = 7.45% < LSM's 8.68%
+    close(m.eCols.find((c) => c.id === 'sql')!.worst, 0.074506)
     expect(m.engineWin).toBe('sqlShard')
   })
 
@@ -181,11 +218,11 @@ describe('engine: each column is judged on the load that REACHES it', () => {
 
   it('blobs leave the database: the engine is judged on pointer rows', () => {
     // 5 MB written objects → blobNeed; engine bw uses 1,024 B pointers:
-    // 5,208.33 × 1,024 × 3 = 1.6e7 B/s ÷ 3.2212e9 = 0.497%
+    // 5,208.33 × 1,024 × 3 = 1.6e7 B/s ÷ 2.1475e9 = 0.745%
     const m = model(vals({ writeSize: 5000 }), req())
     expect(m.blobNeed).toBe(true)
     expect(m.dbBytesW).toBe(POINTER_BYTES)
-    close(m.eCols.find((c) => c.id === 'sql')!.bwU, 0.0049671)
+    close(m.eCols.find((c) => c.id === 'sql')!.bwU, 0.0074506)
     // and so are RAM, scan and storage-shard checks: 1.5e8 pointers/day × 1,024 B
     // × 360 = 5.5296e13 B of rows (not the 270 PB of blobs)
     close(m.dbStorage, 5.5296e13)
@@ -252,11 +289,11 @@ describe('a full scan gets a price, not just a recommendation', () => {
   it('one pass over the rows, as a share of one node’s sequential day', () => {
     const v = vals()
     const m = model(v, req({ analytics: 'yes' }))
-    // 1.10592e14 B ÷ 8 GiB/s (8.58993e9 B/s) = 12,874.6 s
-    close(m.scanSeconds, 12874.6)
-    // ÷ 86,400 s in a day = 14.9% of one node doing nothing else
+    // 1.10592e14 B ÷ 4 GiB/s (4.294967e9 B/s) = 25,749.2 s
+    close(m.scanSeconds, 25749.2)
+    // ÷ 86,400 s in a day = 29.8% of one node doing nothing else
     const c = consequences(v, req({ analytics: 'yes' }), m, false)
-    close(c.scanDayShare, 0.149012)
+    close(c.scanDayShare, 0.298024)
   })
 })
 
@@ -279,8 +316,13 @@ describe('the page can say which requirements are deciding nothing right now', (
     const small = vals({ dau: 1e5, readPct: 10, fanout: 0, writeSize: 1, retention: 1 })
     expect(model(small, req()).ramHosts).toBe(1)
     expect(inertRequirements(small, req())).toContain('keyShape')
-    // and speaks up once the data is past that line
-    expect(inertRequirements(vals({ readPct: 10, fanout: 0, writeSize: 5 }), req())).not.toContain('keyShape')
+    /* ...and speaks up once the data is past that line. The fixture here used
+       to be 5 KB writes; at that size the wide-column engine now wins on the
+       write stream whatever the key looks like, so key shape genuinely IS
+       inert there and the assertion was testing the wrong workload. 1 KB rows
+       keep the B-tree in contention, which is the condition under which the
+       question "what do your keys look like" has an answer worth hearing. */
+    expect(inertRequirements(vals({ readPct: 10, fanout: 0, writeSize: 1 }), req())).not.toContain('keyShape')
   })
 
   it('narrowing the field counts, even when the winner is unchanged', () => {
@@ -311,7 +353,7 @@ describe('“must be current” puts the cache on the write path — and pays fo
      arithmetic beside it was not. */
 
   // 500M DAU × 20/day, 50/50 split, no fan-out: 347,222/s peak, half each way.
-  // readSide = 173,611/s (no deliveries). writeUtil = 173,611 ÷ 26,667 = 6.5,
+  // readSide = 173,611/s (no deliveries). writeUtil = 173,611 ÷ 160,000 = 1.09,
   // so the log is forced and the store sees 173,611 ÷ 3 = 57,870/s sustained.
   const v = vals({ dau: 5e8, readPct: 50, fanout: 0 })
   const stale = model(v, req({ recency: 'stale' }))
@@ -370,8 +412,13 @@ describe('the buffer-pool cliff: when an insert has to seek before it can write'
     expect(m.eCols.find((c) => c.id === 'sqlShard')!.shards).toBe(12070)
     // the ring never pays the RAM split: 166 pieces is the whole bill
     expect(m.eCols.find((c) => c.id === 'wide')!.shards).toBe(166)
-    // behind the forced log: 31,250 ÷ 3 = 10,416.7 writes/s sustained
-    close(m.dbWrites, 10416.667)
+    /* 31,250 writes/s, and all of it reaches the store. This used to read
+        "behind the forced log: 31,250 ÷ 3 = 10,416.7 sustained" — the log fired
+        because 31,250/s was above half the old 26,667/s write ceiling. On the
+        re-measured 50 µs durable write the ceiling is 160,000/s, so nothing
+        forces a log and the database takes the peak unsmoothed. */
+    expect(m.logNeed).toBe(false)
+    close(m.dbWrites, 31250)
 
     /* THE ACTUAL BILL. A B-tree can keep scattered inserts cheap — by splitting
        until a node's slice is back inside its RAM. That is 73x more shards than
@@ -383,10 +430,12 @@ describe('the buffer-pool cliff: when an insert has to seek before it can write'
     expect(bt.nodeBytes).toBeLessThanOrEqual(m.ramBytes)
     expect(bt.poolMisses).toBe(0)
     // so per node it is the same machine as before: reads 3,472.2 ÷ 80,000 = 4.34%,
-    // write stream 10,416.7 × 5,120 × 3 ÷ 3.2212e9 = 4.97%
+    // write stream 31,250 × 5,120 × 3 ÷ 2.1475e9 = 22.35%
     close(bt.rU, 0.043403)
-    close(bt.bwU, 0.049671)
-    expect(m.engineWin).toBe('sqlShard')
+    close(bt.bwU, 0.223517)
+    // and the unsmoothed peak is what hands the engine to the ring: 22.35% of
+    // the write stream against the LSM's 8.68% of read pressure
+    expect(m.engineWin).toBe('wide')
 
     /* The store that CANNOT split is the one that eats the seek. Single-primary
        SQL is already disqualified here for needing shards at all — but the
@@ -394,9 +443,9 @@ describe('the buffer-pool cliff: when an insert has to seek before it can write'
        and "one random read per insert" is that number. */
     const one = m.eCols.find((c) => c.id === 'sql')!
     expect(one.dq).not.toBeNull()
-    close(one.poolMisses, 10416.667)
-    // (3,472.2 × 1 + 10,416.7) ÷ 80,000 = 17.36%, and the seeks outweigh the reads
-    close(one.rU, 0.173611)
+    close(one.poolMisses, 31250)
+    // (3,472.2 × 1 + 31,250) ÷ 80,000 = 43.40%, and the seeks outweigh the reads
+    close(one.rU, 0.434028)
     expect(one.worstName).toBe('the buffer-pool cliff')
 
     // the LSM is charged nothing at any size: it appends to a sorted buffer and
@@ -411,10 +460,13 @@ describe('the buffer-pool cliff: when an insert has to seek before it can write'
     const m = model(vals({ readPct: 10, fanout: 0, writeSize: 5 }), req({ keyShape: 'monotonic' }))
     const bt = m.eCols.find((c) => c.id === 'sqlShard')!
     expect(bt.poolMisses).toBe(0)
-    // back to reads alone: 3,472.2 ÷ 80,000 = 4.34%, under the 4.97% write stream
+    // back to reads alone: 3,472.2 ÷ 80,000 = 4.34%, under the 22.35% write stream
     close(bt.rU, 0.043403)
     expect(bt.worstName).toBe('the write stream')
-    expect(m.engineWin).toBe('sqlShard')
+    // the ring wins here too — which is the honest form of this test's claim.
+    // Removing the seek does not rescue the B-tree when the write stream is
+    // what was binding; it only removes the 12,070-shard bill above.
+    expect(m.engineWin).toBe('wide')
   })
 
   it('a scattered key under RAM is free too — this is what retention buys you', () => {
@@ -496,29 +548,48 @@ describe('the chain: forced additions transform downstream load', () => {
     expect(c.needs.cdn).toBe(true)
     close(c.originAfter, 2.4793)
     expect(c.originHostsAfter).toBe(1)
-    // writes 19.5% of ceiling → no log, and the write RATE never forces a shard —
+    // writes 3.3% of ceiling → no log, and the write RATE never forces a shard —
     // but 1.10592e14 B of rows ÷ 10 TB per node = 11.06 → 12 shards on data size
     expect(c.needs.log).toBe(false)
-    close(c.writeUtilAfter, 0.19531)
+    close(c.writeUtilAfter, 0.0325521)
     expect(c.shardBy).toBe('storage')
     expect(m.storageShards).toBe(12)
     expect(c.needs.shard).toBe(true)
   })
 
-  it('REGRESSION: the log absorbs the peak — the write RATE stops forcing shards', () => {
-    // 500M DAU, defaults otherwise: writes 52,083.3/s peak = 195% of ceiling
+  it('a workload that no longer needs a log, because the disk got faster', () => {
+    /* 500M DAU on defaults used to be the log case: 52,083.3 writes/s peak
+       against a 26,667/s ceiling is 195%, well past the 50% that forces one.
+       The same workload against the re-measured 160,000/s ceiling is 32.6%,
+       and the log is not forced at all. Kept as its own test because it is the
+       clearest single statement of what the October 2026 numbers changed: a
+       workload that needed a buffer in front of the database now does not. */
     const v = vals({ dau: 5e8 })
     const m = model(v, req())
     const c = consequences(v, req(), m, false)
-    close(m.writeUtil, 1.9531)
-    expect(m.logNeed).toBe(true)
-    // sustained: 52,083.3 ÷ 3 = 17,361.1/s → 65.1% of one primary — the write
-    // bound needs exactly 1 shard behind the log (it needed 2 without it)
-    close(c.writeUtilAfter, 0.65104)
+    close(m.writeUtil, 0.325521)
+    expect(m.logNeed).toBe(false)
     expect(c.writeShards).toBe(1)
-    // what still splits the store is data size: 1.10592e15 B ÷ 1e13 = 111 shards
+    // and data size is what splits the store, exactly as before
     expect(c.shardBy).toBe('storage')
     expect(c.shards).toBe(111)
+  })
+
+  it('REGRESSION: the log absorbs the peak — the write RATE stops forcing shards', () => {
+    // It takes a heavier workload to force a log now. 500M DAU at 50 actions:
+    // 130,208.3 writes/s peak = 81.4% of the 160,000/s ceiling.
+    const v = vals({ dau: 5e8, actions: 50 })
+    const m = model(v, req())
+    const c = consequences(v, req(), m, false)
+    close(m.writeUtil, 0.813802)
+    expect(m.logNeed).toBe(true)
+    // sustained: 130,208.3 ÷ 3 = 43,402.8/s → 27.1% of one primary, so the
+    // write bound needs exactly 1 shard behind the log
+    close(c.writeUtilAfter, 0.271267)
+    expect(c.writeShards).toBe(1)
+    // what still splits the store is data size: 2.7648e15 B ÷ 1e13 = 277 shards
+    expect(c.shardBy).toBe('storage')
+    expect(c.shards).toBe(277)
   })
 
   it('Little’s Law sizes the app tier', () => {
@@ -528,9 +599,11 @@ describe('the chain: forced additions transform downstream load', () => {
   })
 
   it('runway: months to the write wall at compounded growth', () => {
-    // ln(26,666.67 ÷ 5,208.33) ÷ ln(1.10) = ln(5.12) ÷ 0.09531 = 17.1 months
+    // ln(160,000 ÷ 5,208.33) ÷ ln(1.10) = ln(30.72) ÷ 0.09531 = 35.9 months.
+    // Was 17.1 against the old 26,667/s ceiling — the re-measured disk roughly
+    // doubled the runway, which is the most cheerful consequence in this file.
     const c = consequences(vals(), req(), model(vals(), req()), false)
-    close(c.monthsToWall, 17.135, 1e-2)
+    close(c.monthsToWall, 35.934, 1e-2)
   })
 
   it('held connections exist only when the transport holds them', () => {
@@ -678,11 +751,11 @@ describe("Amdahl's law: the fix is capped by the wall you did not move", () => {
   it('the gain is the distance between the binding wall and the next one', () => {
     const m = model(vals(), req())
     const w = m.eCols.find((c) => c.id === m.engineWin)!
-    // defaults: read pressure 4.3403%, write stream 0.99341% → 4.3403 ÷ 0.99341
+    // defaults: read pressure 4.3403%, write stream 1.4901% → 4.3403 ÷ 1.4901
     expect(m.amdahl.binding).toBe('read pressure')
     close(m.amdahl.bindingUtil, 0.043403)
-    close(m.amdahl.nextUtil, 0.0099341)
-    close(m.amdahl.gain, 4.36907)
+    close(m.amdahl.nextUtil, 0.0149012)
+    close(m.amdahl.gain, 2.91271)
     // the identity that makes it Amdahl: load-to-first-wall × gain = load-to-second
     close((1 / m.amdahl.bindingUtil) * m.amdahl.gain, 1 / m.amdahl.nextUtil)
     close(m.amdahl.gain, w.worst / w.next)

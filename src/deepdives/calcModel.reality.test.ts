@@ -108,11 +108,14 @@ describe('Twitter end-to-end — the full 2012 architecture from one workload de
   })
   it('REGRESSION (found by this very test): the tweet store shards for DATA SIZE, not write rate', () => {
     // 2e8 tweets/day × 1,024 B × 30 × 60 = 3.6864e14 B = ~335 TiB of rows.
-    // The write rate is a quiet 26% of one primary — rate-based sharding
+    // The write rate is a quiet 4.3% of one primary — rate-based sharding
     // alone said “no shard”, which contradicted T-bird/Gizzard (sharded
-    // MySQL). Data size is its own reason to split:
+    // MySQL). Data size is its own reason to split, and the October 2026
+    // durable write only widens the gap: it was 26% of a primary against the
+    // old 26,667/s ceiling and is 4.3% against 160,000/s, while the 335 TiB
+    // of rows did not move an inch.
     close(m.dbStorage, 3.6864e14)
-    close(c.writeUtilAfter, 0.26042)
+    close(c.writeUtilAfter, 0.043404)
     // 3.6864e14 ÷ 1e13 (10 TB/node) = 36.9 → 37 shards, storage-bound
     expect(m.storageShards).toBe(37)
     expect(c.shardBy).toBe('storage')
@@ -143,22 +146,52 @@ describe('WhatsApp — 2M+ connections on one server (Rick Reed, Erlang Factory 
 })
 
 describe('Netflix — 1.1M client writes/s on 288 Cassandra nodes (Netflix Tech Blog, 2011)', () => {
-  it('measured per-node write throughput lands inside our group-commit sensitivity band', () => {
+  it('the band brackets the measurement on the disk the measurement was taken on', () => {
+    /* This check used to pass against the defaults and now has to name a disk,
+       which is the honest version of what it was always doing.
+
+       Netflix ran this in 2011 on EC2 instances with ephemeral disks. Our
+       default durable write is napkin-math's October 2026 figure — 50 µs, on
+       NVMe attached to a 2026 machine — and comparing a 2011 cluster against
+       it is comparing two different computers. So the disk is set here to the
+       300 µs that napkin-math published until that re-measurement, which is
+       the constant this book was calibrated against and the nearest published
+       figure to the hardware in question. Against that disk the band brackets
+       the measurement, exactly as it did before.
+
+       300 is deliberately not a rung on the µs ladder any more — it was only
+       ever there because the old fsync measurement needed to be exactly
+       representable. It is a legal value, and a test reproducing a specific
+       machine is the right place to use one. */
     // 1,100,000 ÷ 288 = 3,819 client writes/s/node; at replication factor 3
     // each write is applied on 3 nodes → ~11,458 applied writes/s per node.
     const perNodeApplied = (1.1e6 / 288) * 3
     close(perNodeApplied, 11458.3)
-    // our durable-write ceiling: ×1 group commit = 1 ÷ 300 µs = 3,333/s;
-    // ×8 group commit = 26,667/s. The measurement sits between the two —
-    // which is the page's own claim that group commit is the assumption
-    // doing the work (Cassandra's periodic-fsync default is cheaper than
-    // our strict per-commit model, consistent with landing under ×8).
-    const floor = model(vals({ group: 1 }), REQ).writeCeiling
-    const ceil = model(vals({ group: 8 }), REQ).writeCeiling
+    // ×1 group commit = 1 ÷ 300 µs = 3,333/s; ×8 = 26,667/s. The measurement
+    // sits between the two — which is the page's own claim that group commit
+    // is the assumption doing the work (Cassandra's periodic-fsync default is
+    // cheaper than our strict per-commit model, consistent with landing
+    // under ×8).
+    const floor = model(vals({ group: 1, fsync: 300 }), REQ).writeCeiling
+    const ceil = model(vals({ group: 8, fsync: 300 }), REQ).writeCeiling
     close(floor, 3333.3)
     close(ceil, 26666.7)
     expect(perNodeApplied).toBeGreaterThan(floor)
     expect(perNodeApplied).toBeLessThan(ceil)
+  })
+
+  it('and on a 2026 disk the same cluster is not disk-bound at all', () => {
+    /* The other half, and the reason the test above had to change. With the
+       re-measured 50 µs durable write the band is 20,000/s to 160,000/s, and
+       11,458 applied writes/s per node sits BELOW even the no-group-commit
+       floor. Read plainly: the thing that bound those 288 machines in 2011
+       would not bind one machine today, and the gap is fifteen years of disk
+       rather than anything about Cassandra. */
+    const perNodeApplied = (1.1e6 / 288) * 3
+    const floor = model(vals({ group: 1 }), REQ).writeCeiling
+    close(floor, 20000)
+    close(model(vals({ group: 8 }), REQ).writeCeiling, 160000)
+    expect(perNodeApplied).toBeLessThan(floor)
   })
 })
 
@@ -302,11 +335,13 @@ describe('Netflix — throughput per node stays flat as the cluster grows (2011 
   })
   it('the measured 11k writes/s per node sits inside our per-primary band', () => {
     // 1,099,837 ÷ 288 = 3,819 client writes/s/node; x3 replication factor
-    // = ~11.5k applied. Our band is 3.3k (no group commit) to 26.7k (x8).
+    // = ~11.5k applied. On the 300 µs disk that cluster ran on, our band is
+    // 3.3k (no group commit) to 26.7k (x8) — see the note on the bracketing
+    // test above for why the disk is pinned rather than left at the default.
     const perNodeApplied = (1099837 / 288) * 3
     close(perNodeApplied, 11456, 1e-3)
-    expect(perNodeApplied).toBeGreaterThan(model(vals({ group: 1 }), REQ).writeCeiling)
-    expect(perNodeApplied).toBeLessThan(model(vals({ group: 8 }), REQ).writeCeiling)
+    expect(perNodeApplied).toBeGreaterThan(model(vals({ group: 1, fsync: 300 }), REQ).writeCeiling)
+    expect(perNodeApplied).toBeLessThan(model(vals({ group: 8, fsync: 300 }), REQ).writeCeiling)
   })
 })
 

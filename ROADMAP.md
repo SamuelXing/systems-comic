@@ -473,6 +473,29 @@ enthusiastic afternoon and discovering the cost in chapter two.
 
 ## Shipped
 
+- ✅ **Re-based on napkin-math's October 2026 measurements.** Upstream re-measured in
+  [sirupsen/napkin-math#41](https://github.com/sirupsen/napkin-math/pull/41) (merged
+  2026-10-23) on `c4-standard-48-lssd` and Graviton4, renamed every row, and — the part
+  that matters — **split local SSD from cloud network disk.** Three of our four "measured" constants
+  moved: sequential read **8 → 4 GiB/s**, sequential write **3 → 2 GiB/s**, and the
+  durable write **300 → 50 µs**, because cloud SSDs have no write cache to flush. Random
+  8 KiB read held at 100 µs. Two sanity rows had been asserting `matches` against figures
+  upstream no longer publishes (the 70 MiB/s random-read throughput row is deleted), and
+  the compression claim that was hand-waved as "5–10×" now cites the measured 10× for a
+  Parquet table.
+  **The interesting part was downstream.** A faster disk lifts the write ceiling from
+  26,667/s to 160,000/s, which stops forcing a log in front of the database, which
+  un-smooths the 3× peak, which makes a B-tree's write amplification lose a comparison
+  it used to win — so a *hardware constant two steps away* flipped an engine
+  recommendation. Runway at defaults roughly doubled (17 → 36 months). The reachability
+  sweep went red because no single slider could reach a log any more; it carries
+  combinations now, which it should always have done. And the Netflix 2011 anchor had to
+  pin its disk explicitly — checking a 2011 EC2 cluster against a 2026 NVMe constant is
+  comparing two different computers, and on today's disk those 288 machines would not be
+  disk-bound at all.
+  Not changed: the cost table moved too (vCPU $15 → $25/mo, a new spot column), and we
+  have no cost model to break. That is the table the third calculator was waiting on.
+
 - ✅ **Season 2, and the book finished** (#62–#79, #81, #84). Thirteen chapters from
   Spark to the unbundling essay, an epilogue whose two chapters disagree on purpose,
   a close that holds both, and **Chapter 0 last** — the prologue, written after the
@@ -873,11 +896,16 @@ enthusiastic afternoon and discovering the cost in chapter two.
   where you need one server's p99.99. Anchors as tests: Dean & Barroso's 63% reproduces
   exactly (1 − 0.99¹⁰⁰), a 100-way fan-out needs p99.99 (0.99^(1/100)), NY–London is
   55.85 ms theoretical / 78 ms routed against a published 70–80 band, and the datacenter
-  floor is napkin-math's measured 500 µs rather than the wire.
+  floor is half a millisecond rather than the wire. (That floor was attributed to a
+  napkin-math datacenter round trip, which napkin never published — it puts a same-zone
+  hop at 100 µs. The 500 µs row is its *database query*. Corrected in the October 2026
+  resync below; the value survived, the sentence did not.)
   Constants and controls are imported from the capacity page, never restated. Its ladder
   invariant immediately found a **live bug there**: `fsync` defaults to its measured 300 µs
   while `L.us` went …200, 500…, so that thumb had been rendering on 200 while the label read
   300 µs — `inputs.test.ts` only ever walked the six sandboxes, never the calculator.
+  (The 300 rung was added for that measurement and has since been removed: the October
+  2026 figure is 50 µs, which was already on the 1-2-5 ladder.)
   The cross-link is the point of keeping them adjacent: every component the capacity page
   forces is also a hop, so those cards now link to what they cost in milliseconds.
 - ✅ **Component math reconciled with the calculator.** Two real inconsistencies.
@@ -887,7 +915,8 @@ enthusiastic afternoon and discovering the cost in chapter two.
   96-core box implied 80k TPS on CPU alone; it now carries a **commit durability**
   meter derived exactly as the calculator does (8 commits per fsync ÷ 300 µs ≈
   27k/s) — the ceiling cores cannot buy past, because a commit waits on the disk, not
-  the CPU. Kafka's "~10 MB/s per partition" is relabelled as the operational
+  the CPU. (That ceiling is 160k/s on the re-measured disk, and the row no longer ends
+  the argument the way it did; it still binds before CPU on the largest shape.) Kafka's "~10 MB/s per partition" is relabelled as the operational
   guideline it is (recovery and rebalance time), not a disk limit: a partition is a
   sequential append and the disk streams GB/s.
 - ✅ **`scalelab-design` skill** (`.claude/skills/scalelab-design/`) — codifies the

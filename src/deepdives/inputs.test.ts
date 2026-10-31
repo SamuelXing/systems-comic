@@ -70,9 +70,14 @@ describe('the shared ladders', () => {
 
 /* The calculator's own inputs were never covered by the sweep above — it walks
    the six deep-dive sandboxes only. That gap shipped a real contradiction: the
-   fsync constant defaults to its MEASURED 300 µs while its ladder went
+   fsync constant defaulted to its MEASURED 300 µs while its ladder went
    ...200, 500..., so the thumb rendered on 200 while the label read 300 µs.
-   Found by the latency page's copy of this same invariant. */
+   Found by the latency page's copy of this same invariant.
+
+   Both halves of that have since moved: the durable write is 50 µs on
+   napkin-math's October 2026 numbers, and the 300 rung — which only ever
+   existed to make the old measurement exactly representable — has come back
+   off the ladder. The invariant is what keeps those two in step. */
 describe('the calculator panels obey the same rules', () => {
   it('every requirement, workload and hardware default sits on its ladder', () => {
     ;[...WORKLOAD, DERIVED_INP, ...HW].forEach((i) => {

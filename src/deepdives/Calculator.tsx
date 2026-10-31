@@ -638,7 +638,7 @@ export default function Calculator() {
       use: v.readAmp === 0 ? 'no disk reads — it is all RAM' : `${fmt.compact(m.readSide)}/s × ${v.readAmp} · ${pc(c.readUtil)}`,
       how: `${v.ioDepth} concurrent ÷ ${v.randRead} µs` },
     /* The engine table measures every write stream against this, so it has to
-       be listed as a ceiling too — otherwise "1.1% of 3 GiB/s" points at a wall
+       be listed as a ceiling too — otherwise "1.5% of 2 GiB/s" points at a wall
        the reader was never shown. */
     { id: 'stream', k: 'Write stream', v: `${v.seqWrite} GiB/s`,
       use: effE.id === 'mem' ? 'nothing reaches disk — it is all RAM' : `${fmt.bytes(effCol.bw)}/s · ${pc(effCol.bwU)}`,
@@ -836,7 +836,7 @@ export default function Calculator() {
       number: `a full scan of ${fmt.bytes(m.dbStorage)} of rows at ${v.seqRead} GiB/s sequential = ${dur(m.scanSeconds)} — which is ${pc(c.scanDayShare)} of one node's entire sequential-read day, for ONE pass, on the same disk your 5 ms lookups live on`,
       trigger: 'gated by a requirement: set “what the data must answer” to “also analyze it”',
       because:
-        'a row store reads every column of every row to answer an aggregate. A columnar store reads only the columns the query touches and compresses them severalfold (structured data compresses 5–10×, per napkin-math) — fed from the same log by change-data-capture, so the primary never feels the scan',
+        'a row store reads every column of every row to answer an aggregate. A columnar store reads only the columns the query touches and compresses them severalfold (napkin-math measures a Parquet table at dictionary + RLE + zstd at **10×** against its in-memory size) — fed from the same log by change-data-capture, so the primary never feels the scan',
       to: [
         { label: 'Idea: B-trees vs LSM-trees', href: '/ddia/read/storage' },
         { label: 'Kafka deep-dive', href: '/ddia/components/kafka' },
@@ -1792,7 +1792,9 @@ export default function Calculator() {
                   Write ceiling: {v.group} ÷ {v.fsync} µs = <b>{fmt.compact(m.writeCeiling)}/s</b>
                 </td>
                 <td>
-                  fsync is measured at <b>300 µs</b>. With no group commit that is only{' '}
+                  napkin-math measures a durable write at <b>50 µs</b> on local NVMe — and at{' '}
+                  <b>1–2 ms</b> on a network-attached disk, which is what a managed database usually
+                  has. With no group commit, 50 µs is only{' '}
                   <b>{fmt.compact(1 / (v.fsync / 1e6))}/s</b> — the batch size is doing the work
                   here, and it is an assumption, not a measurement.
                 </td>
@@ -1814,8 +1816,9 @@ export default function Calculator() {
                   <b>{fmt.bytes((8192 / v.randRead) * 1e6)}/s</b> of random 8 KiB reads
                 </td>
                 <td>
-                  napkin-math measures both directly: <b>8 GiB/s</b> sequential, <b>~70 MiB/s</b>{' '}
-                  random — the ~100× gap that makes full scans and analytics a different problem.
+                  napkin-math measures sequential at <b>4 GiB/s</b>, and a random 8 KiB read at{' '}
+                  <b>100 µs</b> — one stream of those adds up to ~82 MB/s. The ~50× gap is what makes
+                  full scans and analytics a different problem from serving a row.
                 </td>
                 <td className="ok">matches</td>
               </tr>
