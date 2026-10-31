@@ -267,6 +267,10 @@ export const ROUTES = {
        contents are at `/papers`. */
     card: 'papers-season-2-close',
   },
+  '/papers/flp': {
+    title: 'The Proof That It Cannot Be Done',
+    desc: 'Two seasons of systems that agree on things, and a 1985 paper saying no protocol can promise to. The run that proves it contains no crash at all.',
+  },
 
   '/ddia/components': {
     title: 'Component deep-dives',

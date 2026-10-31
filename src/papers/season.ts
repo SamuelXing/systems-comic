@@ -178,6 +178,7 @@ export const CHAPTER_LINES: Record<string, string> = {
   'local-first': 'The server holds the primary copy, so an edit that has not reached it did not happen. Swap that, and six properties you gave up for collaboration come back.',
   delta: 'Half of one company’s support escalations were people asking how to undo a crashed job. Demote the data objects to candidates and let a log say which of them count.',
   unbundling: 'Nobody is going to ship the one database, because the workloads want different layouts. So standardise the seam between the systems instead of merging them.',
+  flp: 'Consensus is reachable and cannot be promised. The run that proves it has no crash in it — only a schedule, and a protocol obliged to be ready for one.',
   'season-2': 'Four acts, four ways of shortening the delay, and one bill under all of them — plus an ending the season does not resolve, because the field has not.',
 }
 

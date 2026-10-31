@@ -362,11 +362,12 @@ const SEASON_2_ACTS: TocAct[] = [
 const SEASON_3_ACTS: TocAct[] = [
   {
     act: 'Act I · The Floor Underneath',
+    figure: 's3i',
     summary:
       'Thirty-one chapters have stood on results none of them named. There is a proof that the thing Act III of Season 1 spends three chapters building cannot be done at all, and the reason those chapters work anyway is a second paper defining the middle ground between a network that is reliable and one that is not. And there is an algorithm this book has referred to and never contained.',
     next: 'Next: every one of those results assumes a broken machine has stopped. Suppose it lies instead.',
     entries: [
-      { no: 'Ch 31', title: 'The Proof That It Cannot Be Done', paper: 'FLP impossibility — JACM 1985' },
+      { no: 'Ch 31', title: 'The Proof That It Cannot Be Done', paper: 'FLP impossibility — JACM 1985', slug: 'flp' },
       { no: 'Ch 32', title: 'A Photograph Nobody Posed For', paper: 'Distributed Snapshots — Chandy & Lamport, ACM TOCS 1985' },
       { no: 'Ch 33', title: 'Eventually, the Network Behaves', paper: 'Consensus in the Presence of Partial Synchrony — JACM 1988' },
       { no: 'Ch 34', title: 'The Half Nobody Wrote Down', paper: 'Paxos Made Live — PODC 2007' },

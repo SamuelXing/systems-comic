@@ -4767,3 +4767,200 @@ export function ThreeLoansDiagram() {
     </svg>
   )
 }
+
+/** Ch 31 — the frontier the adversary walks along.
+ *
+ *  Time runs left to right, and the only thing being drawn is which decisions
+ *  are still reachable. A configuration where both 0 and 1 are still on the
+ *  table sits in the upper band; one where the answer is fixed sits in the
+ *  lower. A run that terminates has to cross between them on exactly one step,
+ *  and the terra arrows are those steps — the ones the scheduler declines to
+ *  take. Drawn as a band rather than a tree because the proof's claim is not
+ *  about a shape of the state space, it is that there is always one more dot
+ *  to the right. */
+export function BivalentFrontierDiagram() {
+  /* The walk. Hand-placed rather than generated: the point is that the path
+     wanders — a regular sine would read as a mechanism, and the schedule is
+     not one. */
+  const WALK: Array<[number, number]> = [
+    [34, 62],
+    [72, 54],
+    [110, 68],
+    [148, 58],
+    [186, 66],
+    [224, 52],
+    [262, 64],
+    [300, 58],
+  ]
+  const path = WALK.map(([x, y], i) => `${i ? 'L' : 'M'}${x} ${y}`).join(' ')
+  return (
+    <svg
+      viewBox="0 0 344 186"
+      role="img"
+      aria-label="Two horizontal bands. The upper band holds configurations where both decisions are still reachable; the lower band holds configurations where the answer is fixed. A denim path wanders left to right along the upper band without ever descending, while short terra arrows drop from each point on it into the lower band — the steps that would have settled the outcome, and which the schedule never has to take."
+    >
+      <text x="14" y="14" fontFamily={MONO} fontSize="7" fill={MUTED}>
+        one step decides everything — so never take it
+      </text>
+
+      {/* the two bands */}
+      <rect x="14" y="34" width="316" height="52" fill="#eef2f7" stroke={DENIM} strokeWidth="1.2" />
+      <text x="20" y="46" fontFamily={MONO} fontSize="6.2" fill={DENIM}>
+        both 0 and 1 still reachable
+      </text>
+      <rect x="14" y="118" width="316" height="40" fill="#f8ece6" stroke={TERRA} strokeWidth="1.2" />
+      <text x="20" y="152" fontFamily={MONO} fontSize="6.2" fill={TERRA}>
+        the answer is fixed, and no later step can move it
+      </text>
+
+      {/* the declined steps: one per stage, dropping out of the walk */}
+      {WALK.map(([x, y], i) => (
+        <g key={x}>
+          <line x1={x} y1={y + 6} x2={x} y2="112" stroke={TERRA} strokeWidth="0.8" strokeDasharray="2 2.6" />
+          <path d={`M${x - 3} 112 L${x} 118 L${x + 3} 112 Z`} fill={TERRA} />
+          <text x={x} y="130" textAnchor="middle" fontFamily={MONO} fontSize="5.6" fill={TERRA}>
+            {i % 2 ? '1' : '0'}
+          </text>
+        </g>
+      ))}
+
+      {/* the walk itself */}
+      <path d={path} fill="none" stroke={DENIM} strokeWidth="2" />
+      {WALK.map(([x, y]) => (
+        <circle key={x} cx={x} cy={y} r="3.4" fill="#ffffff" stroke={DENIM} strokeWidth="1.8" />
+      ))}
+      {/* the continuation. Started at 306 rather than at the last dot's own
+          centre, which drew the dash straight through the circle. */}
+      <path d="M306 57 L322 54" fill="none" stroke={DENIM} strokeWidth="1.8" strokeDasharray="3 3" />
+      <path d="M322 50.5 L328 53.5 L322 57.5 Z" fill={DENIM} />
+
+      <line x1="14" y1="170" x2="330" y2="170" stroke={MUTED} strokeWidth="0.8" />
+      <text x="14" y="182" fontFamily={MONO} fontSize="6.4" fill={INK}>
+        the whole proof is: there is always another dot to the right
+      </text>
+    </svg>
+  )
+}
+
+/** Ch 31 — the four ways out, each one priced.
+ *
+ *  Two columns rather than four, because at 344 units wide a quarter-column
+ *  gives you thirteen characters a line and every label had to be an
+ *  abbreviation. The top box is the theorem stated as a set of assumptions,
+ *  which is the argument of the figure: nobody beat it, they each deleted a
+ *  line from it. */
+export function FourExitsDiagram() {
+  const EXITS: Array<[string, string, string]> = [
+    ['randomise the processes', 'drops: determinism', 'terminates with probability 1, no deadline'],
+    ['assume partial synchrony', 'drops: delay unbounded forever', 'decides in the good stretches, not before'],
+    ['assume a failure detector', 'drops: silence tells you nothing', 'an oracle you then build out of timeouts'],
+    ['keep safety, drop the promise', 'drops: the termination claim', 'never wrong, sometimes stuck — this is Paxos'],
+  ]
+  return (
+    <svg
+      viewBox="0 0 344 204"
+      role="img"
+      aria-label="A terra box at the top lists the four assumptions the impossibility result needs at once: asynchronous timing, deterministic processes, one process may stop, and the protocol must always decide. Below it, four denim boxes, each deleting one of those assumptions and naming what it gets and what it costs."
+    >
+      <text x="14" y="14" fontFamily={MONO} fontSize="7" fill={MUTED}>
+        nobody beat the theorem — they each deleted a line from it
+      </text>
+
+      <rect x="14" y="24" width="316" height="34" fill="#f8ece6" stroke={TERRA} strokeWidth="1.6" />
+      <text x="22" y="38" fontFamily={MONO} fontSize="6.4" fill={TERRA}>
+        asynchronous · deterministic · one may stop · must always decide
+      </text>
+      <text x="22" y="50" fontFamily={MONO} fontSize="6" fill={MUTED}>
+        all four at once, and no protocol exists
+      </text>
+
+      {EXITS.map(([head, drops, gets], i) => {
+        const x = 14 + (i % 2) * 162
+        const y = 76 + Math.floor(i / 2) * 58
+        return (
+          <g key={head}>
+            <rect x={x} y={y} width="154" height="46" fill="#eef2f7" stroke={DENIM} strokeWidth="1.4" />
+            <text x={x + 7} y={y + 14} fontFamily={MONO} fontSize="6.2" fill={DENIM}>
+              {head}
+            </text>
+            <text x={x + 7} y={y + 26} fontFamily={MONO} fontSize="5.4" fill={TERRA}>
+              {drops}
+            </text>
+            <text x={x + 7} y={y + 38} fontFamily={MONO} fontSize="5.4" fill={MUTED}>
+              {gets}
+            </text>
+          </g>
+        )
+      })}
+
+      <text x="14" y="198" fontFamily={MONO} fontSize="6.4" fill={INK}>
+        pick the line you can afford to delete — that is the whole design space
+      </text>
+    </svg>
+  )
+}
+
+/** Ch 31 — Section 4's protocol, which almost nobody quotes.
+ *
+ *  Two rows and no upward arrows: an initial clique is exactly a set with no
+ *  incoming edges, so the absence of arrows going up is the definition being
+ *  drawn rather than a simplification. N = 5 makes L = 3, which is both the
+ *  ceiling of (N+1)/2 and a strict majority — the two ways the paper states
+ *  the same number. */
+export function InitialCliqueDiagram() {
+  const TOP: Array<[number, string]> = [[92, 'P1'], [172, 'P2'], [252, 'P3']]
+  const BOT: Array<[number, string]> = [[132, 'P4'], [212, 'P5']]
+  const box = (x: number, y: number, label: string, live: boolean) => (
+    <g key={label}>
+      <rect
+        x={x - 27}
+        y={y - 11}
+        width="54"
+        height="22"
+        fill={live ? '#eef2f7' : '#ffffff'}
+        stroke={live ? DENIM : MUTED}
+        strokeWidth={live ? 1.8 : 1}
+      />
+      <text x={x} y={y + 3} textAnchor="middle" fontFamily={MONO} fontSize="7" fill={live ? DENIM : MUTED}>
+        {label}
+      </text>
+    </g>
+  )
+  return (
+    <svg
+      viewBox="0 0 344 182"
+      role="img"
+      aria-label="Five processes in two rows. The top three sit inside a dashed frame marking the initial clique: each heard from the other two, and no edge enters the frame from outside. Dashed lines run downward only, from the clique to the two processes below it, which heard the clique while the clique never heard them."
+    >
+      <text x="14" y="16" fontFamily={MONO} fontSize="7" fill={MUTED}>
+        N = 5, so L = 3 — each process waits for two others
+      </text>
+      <text x="14" y="36" fontFamily={MONO} fontSize="6.2" fill={DENIM}>
+        the initial clique — each heard the other two, nothing enters
+      </text>
+
+      {/* The group is drawn as a frame rather than as an arc over the row. The
+          arc was the first attempt and it ran straight through the label above
+          it — a curve that the geometry lint, which measures straight segments
+          against text boxes, had no opinion about. */}
+      <rect x="58" y="45" width="224" height="34" fill="none" stroke={DENIM} strokeWidth="1" strokeDasharray="4 3" />
+      {TOP.map(([x, label]) => box(x, 62, label, true))}
+      <line x1="119" y1="62" x2="145" y2="62" stroke={DENIM} strokeWidth="1.4" />
+      <line x1="199" y1="62" x2="225" y2="62" stroke={DENIM} strokeWidth="1.4" />
+      {BOT.map(([x, label]) => box(x, 122, label, false))}
+      {/* downward only. The absence of a line coming back up is the definition
+          being drawn, not a simplification of it. */}
+      <line x1="92" y1="73" x2="126" y2="111" stroke={MUTED} strokeWidth="0.9" strokeDasharray="3 3" />
+      <line x1="172" y1="73" x2="138" y2="111" stroke={MUTED} strokeWidth="0.9" strokeDasharray="3 3" />
+      <line x1="252" y1="73" x2="218" y2="111" stroke={MUTED} strokeWidth="0.9" strokeDasharray="3 3" />
+
+      <text x="14" y="152" fontFamily={MONO} fontSize="6.2" fill={MUTED}>
+        P4 and P5 heard the clique; the clique never heard them
+      </text>
+      <line x1="14" y1="162" x2="330" y2="162" stroke={MUTED} strokeWidth="0.8" />
+      <text x="14" y="176" fontFamily={MONO} fontSize="6.4" fill={INK}>
+        there is only ever one such group, so everyone decides from the same inputs
+      </text>
+    </svg>
+  )
+}

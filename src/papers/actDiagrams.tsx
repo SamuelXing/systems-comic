@@ -818,6 +818,63 @@ function ActS2Epi() {
 /** Act key (from `TOC`) → its figure. Kept as a lookup rather than a field on
  *  TOC itself because book.ts is plain data with no JSX. A test asserts the
  *  two stay in step. */
+/** Season 3, Act I — the floor, and the hole in it.
+ *
+ *  The first two seasons are the boxes on top: elections, commits, an agreed
+ *  order, all of them resting on a surface nobody drew. This act draws it and
+ *  finds it is not continuous. The plank is what every working system is
+ *  actually standing on, and the point of the picture is that it is a plank —
+ *  an assumption laid across the gap, not a repair to the floor. */
+function ActS3I() {
+  const TOP: Array<[number, string]> = [
+    [12, 'leader election'],
+    [122, 'commit or abort'],
+    [232, 'one agreed order'],
+  ]
+  return (
+    <svg
+      viewBox="0 0 344 180"
+      role="img"
+      aria-label="Three boxes from earlier seasons — leader election, commit or abort, one agreed order — resting on a floor line. The floor has a gap in it, and a dashed arrow falls through the gap. A thick plank is laid across the gap, labelled: the network settles, eventually and for long enough."
+    >
+      <C x={12} y={16}>
+        everything the book has built, and what it stands on
+      </C>
+
+      {TOP.map(([x, label]) => (
+        <g key={label}>
+          <B x={x} y={26} w={100} h={22} label={label} />
+          <L x1={x + 50} y1={48} x2={x + 50} y2={62} />
+        </g>
+      ))}
+
+      {/* the floor, with a piece missing */}
+      <L x1={12} y1={62} x2={210} y2={62} />
+      <L x1={274} y1={62} x2={332} y2={62} />
+      <L x1={210} y1={62} x2={210} y2={72} />
+      <L x1={274} y1={62} x2={274} y2={72} />
+
+      <A x1={242} y1={64} x2={242} y2={84} tone="pain" dash />
+
+      <C x={12} y={82} tone="pain">
+        the gap under all of it
+      </C>
+      <C x={12} y={96} tone="pain" size={7.8}>
+        no protocol in this model always decides
+      </C>
+
+      <B x={204} y={88} w={128} h={24} tone="new" label="the network settles" sub="eventually, long enough" />
+
+      <C x={12} y={134}>
+        this act digs under the floor, finds the hole, and names the plank
+      </C>
+      <C x={12} y={154} tone="new" size={7.8}>
+        and then one chapter on what it costs to stand on it in production
+      </C>
+    </svg>
+  )
+}
+
 export const ACT_FIGURES: Record<string, () => ReactElement> = {
   prologue: ActPrologue,
   i: ActI,
@@ -832,4 +889,5 @@ export const ACT_FIGURES: Record<string, () => ReactElement> = {
   s2iii: ActS2III,
   s2iv: ActS2IV,
   s2epi: ActS2Epi,
+  s3i: ActS3I,
 }
