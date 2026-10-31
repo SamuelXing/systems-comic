@@ -20,6 +20,7 @@ const RedisPage = lazy(() => import('./deepdives/redis/RedisPage'))
 const RabbitMQPage = lazy(() => import('./deepdives/rabbitmq/RabbitMQPage'))
 const WebPage = lazy(() => import('./deepdives/web/WebPage'))
 const S3Page = lazy(() => import('./deepdives/s3/S3Page'))
+const FlinkPage = lazy(() => import('./deepdives/flink/FlinkPage'))
 const FeedSimPage = lazy(() => import('./sims/feed/FeedSimPage'))
 const ObservabilityPage = lazy(() => import('./sims/observability/ObservabilityPage'))
 const ReadIndexPage = lazy(() => import('./read/IndexPage'))
@@ -94,6 +95,7 @@ export default function App() {
           <Route path="/ddia/components/rabbitmq" element={<RabbitMQPage />} />
           <Route path="/ddia/components/web" element={<WebPage />} />
           <Route path="/ddia/components/s3" element={<S3Page />} />
+          <Route path="/ddia/components/flink" element={<FlinkPage />} />
           <Route path="/ddia/apps" element={<AppsCatalog />} />
           <Route path="/ddia/apps/feed" element={<FeedSimPage />} />
           <Route path="/ddia/apps/observability" element={<ObservabilityPage />} />
