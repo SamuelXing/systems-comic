@@ -300,6 +300,10 @@ export const ROUTES = {
     title: 'S3 and object storage, taken apart',
     desc: 'A GET from signature to first byte, durable-first ordering, erasure coding, and the day your key naming turns into a shard key.',
   },
+  '/ddia/components/flink': {
+    title: 'Apache Flink',
+    desc: 'The stream processor as a machine you operate: one record end to end, barrier alignment under backpressure, the memory split that causes half-empty OOMs, and the restart loop made of defaults.',
+  },
 
   '/calculator/capacity': {
     title: 'Capacity calculator',

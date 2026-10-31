@@ -473,6 +473,25 @@ enthusiastic afternoon and discovering the cost in chapter two.
 
 ## Shipped
 
+- ✅ **Flink, as a flagship deep-dive** — the seventh component page, and the first one
+  built against a subject the papers book already covers. The catalog had it scoped as
+  "the barrier-snapshot algorithm, animated", which is Chapter 23 — so the page was
+  rescoped to the layer the site's own model asks for: *idea → component → architecture*.
+  The chapter asks why the algorithm was invented and what it deleted; the page asks what
+  the machine does with your job and where it breaks at 3am, and links across rather than
+  re-telling.
+  Four traces: one record through chain, shuffle and keyed state; **barrier alignment**,
+  which is the pathology rather than the algorithm and ends on the switch most production
+  jobs have not flipped; the restart cascade; and what is actually deployed when you deploy
+  one job. The envelope's insight row is the **memory split** — managed memory takes 0.4 of
+  a TaskManager before user code sees any of it, which is why a half-empty box dies of an
+  OOM. The chapter 5 sandbox is organised around **state per subtask**, because checkpoint
+  cost and recovery cost are both derived from it, and over it sits max parallelism — the
+  one ceiling chosen on day one that the docs say cannot be changed without discarding state.
+  Every default on the page is cited from the Flink configuration reference; the peak
+  figures are Alibaba's own Double 11 2020 write-up. The trace lint caught one real
+  violation during construction (a route through the RocksDB node that the eye missed).
+
 - ✅ **Re-based on napkin-math's October 2026 measurements.** Upstream re-measured in
   [sirupsen/napkin-math#41](https://github.com/sirupsen/napkin-math/pull/41) (merged
   2026-10-23) on `c4-standard-48-lssd` and Graviton4, renamed every row, and — the part
@@ -946,7 +965,7 @@ enthusiastic afternoon and discovering the cost in chapter two.
 
 ## New-domain components (paper-driven)
 
-Cassandra · DynamoDB · Flink · etcd/Raft · ClickHouse · MotherDuck/DuckDB · Ray ·
+Cassandra · DynamoDB · etcd/Raft · ClickHouse · MotherDuck/DuckDB · Ray ·
 Spark · inference engines (vLLM) · "Inside a web server" (concurrency models + TechEmpower).
 
 ## Ship it

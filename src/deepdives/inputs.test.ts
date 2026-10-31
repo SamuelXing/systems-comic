@@ -5,6 +5,7 @@ import { scaleOutInputs as postgres } from './postgres/scaleout'
 import { scaleOutInputs as rabbitmq } from './rabbitmq/scaleout'
 import { scaleOutInputs as web } from './web/scaleout'
 import { scaleOutInputs as s3 } from './s3/scaleout'
+import { scaleOutInputs as flink } from './flink/scaleout'
 import { LAD, snapIndex } from './ladder'
 import { WORKLOAD, DERIVED_INP, HW } from './calcModel'
 import type { InputDef } from './types'
@@ -32,6 +33,7 @@ const SANDBOXES: [string, InputDef[]][] = [
   ['rabbitmq', rabbitmq],
   ['web', web],
   ['s3', s3],
+  ['flink', flink],
 ]
 
 describe('sandbox inputs are order-of-magnitude ladders', () => {
