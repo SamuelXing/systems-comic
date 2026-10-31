@@ -231,34 +231,34 @@ export const cascadeTrace: TraceSpec = {
     {
       title: 'Someone forgets a transaction',
       prose:
-        'A worker crashed mid-transaction, an ORM leaked a session, or a human typed <code>BEGIN</code> in psql and went to lunch. The backend sits “idle in transaction,” holding a snapshot from hours ago. Nothing is broken. <b>No alert fires.</b>',
+        'A worker crashed in the middle of a transaction, an ORM leaked a session, or someone typed <code>BEGIN</code> in psql and went to lunch. The backend now sits in the state <em>idle in transaction</em>, holding a snapshot taken hours ago. Nothing is broken, and no alert fires.',
       focus: ['idle'],
     },
     {
       title: 'The cluster’s garbage collection stops',
       prose:
-        'Vacuum may only reclaim row versions older than the <b>oldest live snapshot</b> — and that snapshot is now frozen in time. Autovacuum keeps running, keeps reporting success, and <b>frees nothing</b>. One connection has quietly disabled cleanup for every table in the cluster.',
+        'Vacuum may only remove row versions that are older than the oldest live snapshot, and that snapshot is now fixed in time. Autovacuum keeps running and keeps reporting success, but it frees nothing. One connection has quietly disabled cleanup for every table in the cluster.',
       focus: ['idle', 'horizon'],
       particles: [{ from: 'idle', to: 'horizon', color: AMBER }],
     },
     {
       title: 'The debt compounds',
       prose:
-        'Every UPDATE and DELETE keeps adding dead versions that can’t be collected. Hot tables and their indexes <b>physically grow</b> — the same logical rows smeared over ever more 8 KB pages. Still no page: bloat dashboards are checked weekly, if at all.',
+        'Every UPDATE and DELETE keeps adding dead versions that cannot be collected. The hot tables and their indexes grow physically, with the same logical rows spread over ever more 8 KB pages. There is still no alert; bloat dashboards are looked at weekly, if at all.',
       focus: ['horizon', 'bloat'],
       particles: [{ from: 'horizon', to: 'bloat', color: AMBER }],
     },
     {
       title: 'The cache silently deflates',
       prose:
-        'Shared buffers hold pages, not rows — and the pages are increasingly <b>corpses with a few live rows each</b>. The effective cache shrinks without a single byte of RAM changing. Cache hit ratio starts drifting down; disk reads creep up.',
+        'Shared buffers hold pages, not rows, and the pages increasingly contain mostly dead versions with a few live rows each. The effective size of the cache shrinks without a byte of memory changing. The cache hit ratio begins to drift downward, and disk reads creep up.',
       focus: ['horizon', 'cachehit'],
       particles: [{ from: 'horizon', to: 'cachehit', color: AMBER }],
     },
     {
       title: 'Latency spikes (first real symptom)',
       prose:
-        'More pages per scan plus more disk reads per page: <b>p99 climbs</b> — and this is usually the first metric anyone is actually watching. Note that it is <em>three hops from the root cause</em>: nothing about a latency graph says “a transaction has been open since 9:14.”',
+        'More pages per scan, and more disk reads per page: p99 latency rises, and this is usually the first metric that anyone is actually watching. Note that it is three steps removed from the cause. Nothing about a latency graph says that a transaction has been open since 9:14.',
       focus: ['bloat', 'p99', 'cachehit'],
       particles: [
         { from: 'bloat', to: 'p99', color: AMBER },
@@ -268,21 +268,21 @@ export const cascadeTrace: TraceSpec = {
     {
       title: 'Connections pile up',
       prose:
-        'Every query holds its connection a little longer, so the app pools run dry and open more — against a database that spends a process on each one. The primary now burns CPU on <b>context switching instead of queries</b>, which slows queries further. The feedback loop has closed.',
+        'Every query now holds its connection a little longer, so the application pools run dry and open more connections, against a database that dedicates a process to each. The primary spends an increasing share of its CPU on context switching rather than on queries, which slows the queries further. The feedback loop has closed.',
       focus: ['p99', 'conns'],
       particles: [{ from: 'p99', to: 'conns', color: RED }],
     },
     {
       title: 'The wall',
       prose:
-        '<code>FATAL: sorry, too many clients already.</code> New connections are refused, and every service that needs the database starts erroring <b>simultaneously</b>. The incident channel fills with symptoms from five different teams — none of them mentioning vacuum, transactions, or the intern’s psql session.',
+        '<code>FATAL: sorry, too many clients already.</code> New connections are refused, and every service that depends on the database begins failing at the same time. The incident channel fills with symptoms reported by five different teams, none of which mention vacuum, transactions, or a psql session.',
       focus: ['conns', 'wall'],
       particles: [{ from: 'conns', to: 'wall', color: RED }],
     },
     {
       title: 'The lesson: read it backwards',
       prose:
-        'The fix is one command — <code>pg_terminate_backend</code> on the idle transaction — <em>if you know to look</em>. That is the difference a runbook makes: page on the <b>leading</b> indicators (oldest transaction age, dead-tuple trend), set <code>idle_in_transaction_session_timeout</code> so this class of incident cannot exist, and when p99 pages you anyway, walk the cascade backwards before adding hardware.',
+        'The fix is a single command, <code>pg_terminate_backend</code> on the idle transaction, if one knows to look for it. This is the difference a runbook makes. Alert on the leading indicators, such as the age of the oldest transaction and the trend in dead tuples; set <code>idle_in_transaction_session_timeout</code> so that this class of incident cannot occur; and when a p99 alert arrives anyway, walk the cascade backwards before adding hardware.',
       focus: ['idle', 'horizon', 'bloat', 'cachehit', 'p99', 'conns', 'wall'],
       particles: [
         { from: 'wall', to: 'idle', color: VIO, via: [{ x: 76.5, y: 47 }, { x: 11.5, y: 47 }] },
