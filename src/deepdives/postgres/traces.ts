@@ -216,56 +216,56 @@ export const fleetTrace: TraceSpec = {
     {
       title: 'Fan-in through the pooler',
       prose:
-        'Hundreds of app instances × per-pod pools = thousands of client connections — pointed not at Postgres but at a <b>PgBouncer tier</b>, which multiplexes them onto a few dozen real backends per database. This is the first thing every production Postgres story has in common: nobody at scale connects apps straight to the primary.',
+        'Hundreds of application instances, each with its own connection pool, add up to thousands of client connections. They are not pointed at Postgres directly but at a tier of PgBouncer processes, which multiplex them onto a few dozen real backends per database. This is the first thing that every production Postgres deployment has in common: at scale, nobody connects the application straight to the primary.',
       focus: ['fleet', 'pgb'],
       particles: [{ from: 'fleet', to: 'pgb', color: C.client, count: 3 }],
     },
     {
       title: 'Every write funnels to one box',
       prose:
-        'All writes from the entire fleet land on <b>one primary</b>. That sounds fragile, and it is the point: one machine assigning one WAL order is what makes transactions cheap. The whole fleet design exists to protect this box — pooling in front of it, replicas beside it, archives behind it.',
+        'Every write from the entire fleet lands on one primary. That sounds fragile, and in a sense it is, but it is also the point: having one machine assign one order to the WAL is what makes transactions cheap. The rest of the fleet exists to protect this machine, with pooling in front of it, replicas beside it, and archives behind it.',
       focus: ['pgb', 'primary'],
       particles: [{ from: 'pgb', to: 'primary', color: C.wal, via: [{ x: 25, y: 27 }, { x: 25, y: 12.5 }] }],
     },
     {
       title: 'The sync standby',
       prose:
-        'A synchronous standby (typically in another availability zone) must ack the WAL before COMMIT returns. Cost: one network RTT on every write. Purchase: <b>failover loses zero committed transactions</b>. Most shops run exactly one sync standby plus async replicas — paying the RTT once, not N times.',
+        'A <em>synchronous standby</em>, usually in another availability zone, must acknowledge each WAL record before COMMIT returns to the client. The cost is one network round trip on every write. What it buys is that a failover loses no committed transactions. Most installations run exactly one synchronous standby and make the remaining replicas asynchronous, so that the round trip is paid once rather than once per replica.',
       focus: ['primary', 'sync'],
       particles: [{ from: 'primary', to: 'sync', color: C.wal }],
     },
     {
       title: 'Async replicas absorb the reads',
       prose:
-        'Read-only traffic — dashboards, feeds, search indexing — routes to <b>async replicas</b> replaying the WAL milliseconds behind. The app must be lag-literate: a user who just wrote must read the primary (or a caught-up replica) or they’ll watch their own comment vanish. Replica count scales reads nearly linearly; it does nothing for writes.',
+        'Read-only traffic, such as dashboards, feeds and search indexing, is routed to asynchronous replicas that replay the WAL a few milliseconds behind the primary. The application has to take replication lag into account: a user who has just written something must read from the primary, or from a replica known to have caught up, or they will see their own change disappear. Adding replicas scales reads almost linearly; it does nothing for writes.',
       focus: ['pgb', 'async'],
       particles: [{ from: 'pgb', to: 'async', color: C.client, count: 2 }],
     },
     {
       title: 'The WAL goes to object storage too',
       prose:
-        'Every WAL segment is continuously shipped to <b>object storage</b> alongside periodic base backups (pgBackRest, WAL-G). Backups here aren’t nightly dumps — they are <em>the log itself</em>, which is what makes the next step possible. Archive lag is a paged metric: a backup you can’t restore from is a rumor.',
+        'Every WAL segment is shipped continuously to object storage, alongside periodic base backups, using a tool such as pgBackRest or WAL-G. A backup in this arrangement is not a nightly dump; it is the log itself, which is what makes the next step possible. Archive lag is worth alerting on, since a backup that cannot be restored is not really a backup.',
       focus: ['primary', 'arch'],
       particles: [{ from: 'primary', to: 'arch', color: C.buf }],
     },
     {
       title: 'Point-in-time recovery',
       prose:
-        '“Restore to 14:03:59, right before the bad migration” — take the last base backup, replay archived WAL up to any chosen second. PITR is the difference between an incident and a catastrophe when the failure is <em>logical</em> (bad deploy, fat-fingered DELETE) and replicas have faithfully replicated the damage everywhere.',
+        'Restoring to 14:03:59, just before the bad migration, means taking the most recent base backup and replaying the archived WAL up to that second. This is <em>point-in-time recovery</em> (PITR), and it is what separates an incident from a catastrophe when the failure is logical, such as a bad deployment or a mistaken DELETE, because the replicas will have faithfully replicated the damage.',
       focus: ['arch', 'pitr'],
       particles: [{ from: 'arch', to: 'pitr', color: C.buf }],
     },
     {
       title: 'Failover — the drill you rehearse',
       prose:
-        'Primary dies: orchestration (Patroni et al.) promotes the sync standby — guaranteed to have every committed byte — and repoints the PgBouncer tier. Writes pause for seconds. The dangerous parts are human: split-brain (two primaries taking writes) is why fencing and consensus-backed leader election exist. You drill this quarterly, or you discover it doesn’t work during the real one.',
+        'When the primary fails, an orchestrator such as Patroni promotes the synchronous standby, which is guaranteed to hold every committed byte, and repoints the PgBouncer tier at it. Writes pause for a few seconds. The dangerous part is not the mechanism but its edge cases: two machines both believing they are the primary, known as <em>split-brain</em>, is the reason fencing and consensus-based leader election exist. Failover is rehearsed regularly, or it is discovered not to work during the real one.',
       focus: ['sync', 'pgb'],
       particles: [{ from: 'pgb', to: 'sync', color: C.vac, via: [{ x: 25, y: 20 }, { x: 25, y: 2 }, { x: 60, y: 2 }] }],
     },
     {
       title: 'When the ladder ends: shard',
       prose:
-        'When one primary’s write throughput is truly exhausted, the fleet multiplies: data is split by a <b>shard key</b> (Notion: <code>team_id</code> — everything for one workspace lives together) across many full clusters, each with its own primary, replicas, and failover. Cross-shard joins and transactions are gone; the app-level router is the new source of truth. It works — and it is the least reversible decision on this page.',
+        'When one primary’s write throughput is genuinely exhausted, the fleet is multiplied. Data is split by a <em>shard key</em> (at Notion, <code>team_id</code>, so that everything belonging to one workspace is stored together) across many full clusters, each with its own primary, replicas and failover. Joins and transactions across shards are no longer available, and an application-level router becomes the authority on where each row lives. This works, but it is the least reversible decision on this page.',
       focus: ['fleet', 'router', 's1', 's2'],
       particles: [
         { from: 'fleet', to: 'router', color: C.client, via: [{ x: 12.5, y: 2 }, { x: 87, y: 2 }] },

@@ -23,24 +23,24 @@ const CHAPTERS = [
 ]
 
 const LIMITS: [string, string, string][] = [
-  ['Writable primaries', '1', 'No native multi-master. Every write funnels through one box — the deepest wall in the stack. The ladder postpones it; only sharding escapes it.'],
-  ['Connections', '1 OS process each', 'Default max_connections = 100; a few hundred active backends saturate a big box. PgBouncer is standard equipment, not an optimization.'],
-  ['Commit latency', '1 WAL fsync (~0.1–1 ms)', 'The floor under every write. Synchronous replication adds a network RTT on top of it.'],
-  ['UPDATE cost', 'new version + index entries', 'MVCC write amplification: an update is an insert plus deferred cleanup, and touches every index unless HOT applies.'],
-  ['Transaction IDs', '32-bit, circular', 'Vacuum must freeze old tuples or the database refuses writes — wraparound is the hardest failure on this page.'],
-  ['Physical replicas', 'byte-identical, read-only', 'Streaming replication copies the whole cluster, same major version, no partial subscriptions. Logical replication is the selective escape hatch.'],
-  ['Working set', 'must ~fit in RAM', 'shared_buffers + OS cache. When the hot set spills, every miss is a random read — a cliff, not a slope.'],
+  ['Writable primaries', '1', 'There is no native multi-master mode: every write passes through one machine. This is the deepest limit in the stack. The ladder in Chapter 5 postpones it; only sharding removes it.'],
+  ['Connections', '1 OS process each', 'The default max_connections is 100, and a few hundred active backends saturate even a large machine. A pooler such as PgBouncer is standard equipment rather than an optimisation.'],
+  ['Commit latency', '1 WAL fsync (~50 µs–1 ms)', 'The floor under every write, set by the disk: tens of microseconds on local NVMe, about a millisecond on a network volume. Synchronous replication adds a network round trip on top.'],
+  ['UPDATE cost', 'new version + index entries', 'Because rows are not overwritten, an update is an insert plus a deferred delete, and it touches every index on the table unless the HOT optimisation applies.'],
+  ['Transaction IDs', '32-bit, circular', 'Vacuum must freeze old tuples before the counter wraps, or the database refuses writes. Wraparound is the hardest failure on this page.'],
+  ['Physical replicas', 'byte-identical, read-only', 'Streaming replication copies the entire cluster, requires the same major version, and cannot subscribe to a subset of it. Logical replication is the selective alternative.'],
+  ['Working set', 'must roughly fit in RAM', 'Across shared_buffers and the OS cache together. When the hot data no longer fits, every miss becomes a random read, and throughput drops sharply rather than gradually.'],
 ]
 
 const FAILS: [string, string][] = [
-  ['Connection storm', 'A deploy restarts the whole app fleet; every pod reconnects at once and the primary drowns in fork() and auth before serving a single query. Pool at the infrastructure level and cap total connections.'],
-  ['The forgotten transaction', 'One idle-in-transaction backend pins the xmin horizon: vacuum silently frees nothing, bloat compounds, p99 creeps for days. Set idle_in_transaction_session_timeout — this class of incident is fully preventable.'],
-  ['Replication slot left behind', 'A decommissioned replica or dead CDC pipeline leaves a slot; the primary faithfully retains WAL for a reader that will never come until the disk fills and it PANICs. Set max_slot_wal_keep_size.'],
-  ['XID wraparound shutdown', 'Autovacuum starved for months on one huge table; the age counter crosses the line and Postgres stops accepting writes mid-business-day, then needs hours of vacuum to reopen. Alert on age(datfrozenxid) — it gives weeks of warning.'],
-  ['The 3am plan flip', 'Stats drift past a threshold and the planner flips a hot query from index scan to seq scan. The query that ran in 2 ms all year now takes 40 s and saturates I/O for everyone. ANALYZE is the one-command fix — if you think to look at the plan.'],
-  ['Read-your-writes surprise', 'A user posts a comment, the next page load reads a lagging replica, the comment is gone. Session stickiness or LSN-tracking (“wait until replica reaches my write”) — it must be designed, not patched.'],
-  ['Checkpoint storm', 'A bulk load fills max_wal_size early, forcing back-to-back checkpoints; full-page writes multiply WAL, which forces more checkpoints. Write latency sawtooths. Raise max_wal_size and spread the flush.'],
-  ['The sharding cliff', 'Sharding is deferred until the primary is on fire, then executed under duress — schema changes frozen, joins broken in production. Notion picked its shard key years of growth ahead of the wall. That is the lesson.'],
+  ['Connection storm', 'A deploy restarts the whole application fleet, every instance reconnects at once, and the primary spends its time forking processes and authenticating them before it can serve a query. Pooling at the infrastructure level, with a cap on total connections, prevents this.'],
+  ['The forgotten transaction', 'One backend left idle in a transaction pins the xmin horizon, so vacuum runs but frees nothing, bloat accumulates, and p99 latency rises over days. Setting idle_in_transaction_session_timeout removes this class of incident entirely.'],
+  ['Replication slot left behind', 'A decommissioned replica or an abandoned change-data-capture pipeline leaves its replication slot in place. The primary dutifully retains WAL for a reader that will never return, until the disk fills and the server panics. max_slot_wal_keep_size bounds the damage.'],
+  ['XID wraparound shutdown', 'Autovacuum is starved for months on one very large table, the transaction ID age crosses the limit, and Postgres stops accepting writes in the middle of the business day. Reopening requires hours of vacuuming. Alerting on age(datfrozenxid) gives weeks of warning.'],
+  ['The 3am plan flip', 'Statistics drift past a threshold and the planner switches a hot query from an index scan to a sequential scan. A query that took 2 ms for a year now takes 40 s and saturates the disk for everyone else. ANALYZE fixes it in one command, provided someone thinks to look at the plan.'],
+  ['Read-your-writes surprise', 'A user posts a comment, the next page load is served by a lagging replica, and the comment appears to have vanished. The remedy is session stickiness, or recording the LSN of the user\u2019s last write and waiting for the replica to reach it. It has to be designed in; it cannot be patched on afterwards.'],
+  ['Checkpoint storm', 'A bulk load fills max_wal_size early, forcing checkpoints back to back. Each checkpoint re-enables full-page writes, which multiplies the WAL volume, which forces the next checkpoint sooner. Write latency takes on a sawtooth shape. Raising max_wal_size and spreading the flush breaks the loop.'],
+  ['The sharding cliff', 'Sharding is deferred until the primary is already overloaded, and then carried out under pressure, with schema changes frozen and joins breaking in production. Notion chose its shard key years of growth before it was needed. That is the lesson.'],
 ]
 
 function Ch({ id, n, title, children }: { id: string; n: number; title: string; children: React.ReactNode }) {
@@ -206,100 +206,115 @@ export default function PostgresPage() {
 
           <Ch id="hardware" n={3} title="The hardware envelope">
             <p>
-              Postgres&apos;s resource profile inverts Kafka&apos;s. Kafka moves bytes and barely
-              computes; Postgres <b>computes on every row</b> — parsing, planning, index descent,
-              visibility checks — so CPU matters. But the two numbers that actually define a
-              primary&apos;s envelope are quieter: <b>does the working set fit in RAM</b>, and{' '}
-              <b>how fast can one disk fsync the WAL</b>. RAM misses turn reads into random I/O
-              (a cliff, not a slope), and WAL-flush latency is the floor under every commit.
-              Pick a shape and push the workload until a meter goes red:
+              The resource profile of Postgres is in some ways the opposite of Kafka&apos;s.
+              Kafka moves bytes and does very little computation on them; Postgres does work on
+              every row it touches, parsing and planning the query, descending indexes and
+              checking the visibility of each tuple, so CPU does matter. However, the two
+              numbers that most often decide whether a primary is comfortable or in trouble are
+              quieter ones: whether the <em>working set</em> fits in memory, and how quickly the
+              disk can fsync the WAL. If the working set no longer fits, each miss becomes a
+              random read, and throughput falls off sharply rather than degrading gradually. The
+              WAL flush latency, as we saw in Chapter 2, is the floor under every commit. The
+              envelope below lets you pick a machine shape and push the workload until one of
+              its meters turns red.
             </p>
             <HardwareEnvelope />
             <p className="fl-src-note">
-              Rules of thumb: <code>shared_buffers</code> ≈ 25% of RAM with the OS cache doing the
-              rest (PostgreSQL wiki,{' '}
+              Rules of thumb: <code>shared_buffers</code> at about 25% of RAM, with the operating
+              system&apos;s page cache holding the rest (PostgreSQL wiki,{' '}
               <a href="https://wiki.postgresql.org/wiki/Tuning_Your_PostgreSQL_Server" target="_blank" rel="noreferrer">
                 Tuning Your PostgreSQL Server
               </a>
-              ); per-query CPU costs are order-of-magnitude for tuned OLTP.
+              ). The per-query CPU costs are order-of-magnitude figures for a tuned OLTP workload.
             </p>
           </Ch>
 
           <Ch id="scale-up" n={4} title="Scaling up — what a bigger box buys">
             <p>
-              Vertical scaling maps cleanly onto the anatomy. <b>More RAM</b> is the headline
-              purchase: it widens the working-set window, and its returns are step-shaped — going
-              from &ldquo;hot set spills&rdquo; to &ldquo;hot set fits&rdquo; can be worth 10×,
-              while RAM beyond the working set buys almost nothing. <b>Faster NVMe</b> lowers the
-              WAL-fsync floor under every commit and absorbs the random reads of cache misses.{' '}
-              <b>More cores</b> raise concurrent query throughput and feed parallel scans —
-              though a single query&apos;s latency barely moves, and past ~32 cores contention on
-              shared structures (lock manager, WAL insertion) eats into the gains.
+              Vertical scaling maps fairly directly onto the anatomy in Chapter 2. More memory is
+              usually the most valuable purchase, because it widens the range of workloads whose
+              working set fits. Its returns are step-shaped rather than linear: going from a
+              working set that spills out of memory to one that fits can improve throughput by
+              an order of magnitude, whereas memory beyond the working set buys very little. A
+              faster NVMe drive lowers the WAL flush latency under every commit and absorbs the
+              random reads caused by cache misses. More cores raise the number of queries that
+              can run concurrently and allow parallel scans, although the latency of a single
+              query barely changes, and beyond roughly 32 cores contention on shared structures
+              such as the lock manager and WAL insertion begins to eat into the gains.
             </p>
             <p>
-              The diminishing returns are structural, and worth naming: every commit still
-              serializes through <b>one WAL stream</b> on one disk; vacuum debt grows with write
-              rate no matter the hardware; and one giant primary is one giant blast radius —
-              failover, re-replication, and restores all scale with its size. Postgres rewards a{' '}
-              <em>strong</em> primary, but past a point the money buys risk, not headroom. That
-              point is where Chapter 5 begins.
+              The diminishing returns are structural, and it is worth being clear about why.
+              Every commit still passes through a single WAL stream on a single disk, however
+              fast that disk is. The vacuum work described in Chapter 2 grows with the write
+              rate regardless of the hardware. And one very large primary is one very large unit
+              of failure: failover, re-replication and restore all take time proportional to its
+              size. Postgres rewards a strong primary, but past a certain point additional money
+              buys risk rather than headroom. That point is where Chapter 5 begins.
             </p>
           </Ch>
 
           <Ch id="scale-out" n={5} title="Scaling out — the read/write asymmetry">
             <p>
-              Horizontal Postgres is a story of one asymmetry: <b>reads scale out, writes do
-              not</b>. Replicas replay the WAL and serve reads near-linearly — but every replica
-              replays <em>every write</em>, so replicas add zero write capacity. Meanwhile the
-              scaled-out app tier multiplies connections against a database that spends a process
-              on each. The sandbox below is the whole game: push the sliders and watch which wall
-              you hit first:
+              Scaling Postgres horizontally is largely a story about one asymmetry: reads can be
+              spread across machines, but writes cannot. A replica replays the WAL and can serve
+              read queries, so adding replicas increases read capacity almost linearly. However,
+              every replica has to replay every write in order to stay current, so replicas add
+              no write capacity at all; each write still has to be applied on the primary first.
+              Meanwhile, an application tier that has itself been scaled out opens more and more
+              connections to a database that dedicates a process to each one. The sandbox below
+              lets you vary these quantities and see which limit you reach first.
             </p>
             <Sandbox content={{ inputs: scaleOutInputs, compute: computeScaleOut }} />
             <div className="boundary">
               <h3>The scaling ladder — apply in order</h3>
               <ol className="ladder">
-                <li><b>Pool connections</b> (PgBouncer, transaction mode) — collapse the app fleet&apos;s thousands onto a few dozen backends. Cheapest, do it first.</li>
-                <li><b>Cache in front</b> (Redis, app-level) so repeat reads never reach the database at all — the highest-leverage move in the stack.</li>
-                <li><b>Add read replicas</b> and route reads to them; make the app lag-literate (read-your-writes to the primary).</li>
-                <li><b>Scale the primary up</b> — RAM to fit the working set, NVMe for the WAL floor. Simple, effective, bounded.</li>
-                <li><b>Partition</b> big tables (by time or tenant) so indexes, scans, and vacuum each touch less; detach old ranges instead of DELETE-ing them.</li>
-                <li><b>Shard</b> across independent clusters only when one primary&apos;s writes are truly exhausted — it costs cross-shard transactions and joins, forever.</li>
+                <li><b>Pool connections.</b> Put PgBouncer in transaction mode between the application and the database, so that thousands of application connections share a few dozen backends. This is the cheapest step, and it should be taken first.</li>
+                <li><b>Cache in front.</b> Serve repeated reads from Redis or an application-level cache, so that they never reach the database. Of all the steps here, this one usually removes the most load for the least effort.</li>
+                <li><b>Add read replicas</b> and route read queries to them. The application then has to take replication lag into account: a user who has just written must read from the primary.</li>
+                <li><b>Scale the primary up:</b> enough memory for the working set, and NVMe storage for the WAL. This is simple and effective, but bounded, as Chapter 4 explained.</li>
+                <li><b>Partition</b> large tables, by time or by tenant, so that each index, scan and vacuum pass touches less data. Old ranges can then be detached instead of deleted row by row.</li>
+                <li><b>Shard</b> across independent clusters, but only once one primary&apos;s write capacity is genuinely exhausted. From then on, transactions and joins across shards are no longer available.</li>
               </ol>
             </div>
           </Ch>
 
           <Ch id="ops" n={6} title="Operations: the pager view">
             <p>
-              Everything above assumed things go right. In production, the defining Postgres
-              incidents are <b>slow-motion</b> — debt that compounds for days before the first
-              alert. The cascade below is the canonical one, and the reason experienced operators
-              page on causes, not symptoms. Play it, then keep the runbook:
+              Everything so far has assumed that things go right. In production, the Postgres
+              incidents that matter are rarely sudden. They are usually the result of some debt
+              that has been accumulating for days before the first alert, and by the time a
+              symptom is visible the cause is several steps removed from it. The trace below
+              follows the most common of these cascades, and it is the reason experienced
+              operators alert on causes rather than on symptoms. Play it, and then keep the
+              runbook that follows.
             </p>
             <TracePlayer spec={cascadeTrace} />
             <h3>The metrics that matter — a runbook</h3>
             <p>
-              Tap any metric for the full card: what healthy looks like, what a spike means, what
-              breaks next, likely causes ranked common-to-rare, and what you actually do — safest
-              action first.
+              Select any metric to see its full card: what a healthy value looks like, what a
+              change in it means, what breaks next, the likely causes from most to least common,
+              and what to do about it, starting with the safest action.
             </p>
             <MetricRunbook cards={METRICS} />
             <div className="note">
-              <b>The operating mindset.</b> Postgres rarely fails suddenly; it fails on a{' '}
-              <em>schedule you can read</em> — vacuum debt, XID age, WAL retention, working-set
-              growth are all visible weeks ahead. Page on the leading indicators (oldest
-              transaction, slot retention, freeze age), set the two timeouts that make whole
-              incident classes impossible, and treat p99 as the question, never the answer.
+              <b>The operating mindset.</b> Postgres seldom fails without warning. Vacuum debt,
+              transaction ID age, WAL retention and working-set growth are all visible weeks in
+              advance to anyone who looks. The practical consequences are to alert on the
+              leading indicators (the oldest open transaction, slot retention, freeze age)
+              rather than on latency alone, to set the two timeouts that make whole classes of
+              incident impossible, and to treat a p99 alert as a question about which of the
+              others has moved, not as an answer.
             </div>
           </Ch>
 
           <Ch id="bigfleet" n={7} title="What a large Postgres fleet actually looks like">
             <p>
-              The surprise at the top end is how far <b>one primary</b> goes. Notion ran the
-              entire product on a single Postgres instance for five years; Instagram, Basecamp,
-              and Stack Overflow&apos;s class of workload all lived on &ldquo;one strong box plus
-              replicas&rdquo; far past the point folklore says is possible. When Notion finally
-              sharded, the shape of the solution became the industry&apos;s reference:
+              The surprising thing at the top end is how far a single primary goes. Notion ran
+              its entire product on one Postgres instance for five years. Instagram, Basecamp
+              and Stack Overflow all ran workloads of a similar class on one large machine with
+              replicas for much longer than folklore suggests is possible. When Notion did
+              eventually shard, the shape of its solution became the reference that others
+              copied:
             </p>
             <div className="bigfacts">
               <div className="bigfact"><div className="bf-v">5 yrs</div><div className="bf-k">on one instance</div><div className="bf-s">before sharding was forced</div></div>
@@ -308,12 +323,13 @@ export default function PostgresPage() {
               <div className="bigfact"><div className="bf-v">15 → 5</div><div className="bf-k">schemas per host</div><div className="bf-s">re-sharding = moving schemas</div></div>
             </div>
             <p>
-              The key design move: <b>far more logical shards than machines</b>. Splitting data
-              into 480 schemas across 32 hosts meant &ldquo;scaling out&rdquo; later was{' '}
-              <em>moving schemas between machines</em>, not re-splitting data — the painful
-              decision was made once. Below, the topology those articles describe, walked end to
-              end — and note how much of it is just the WAL from Chapter 2, pointed at different
-              consumers:
+              The key decision was to create far more <em>logical</em> shards than physical
+              machines. Splitting the data into 480 schemas spread over 32 hosts meant that
+              scaling out later consisted of moving schemas between machines, rather than
+              splitting the data again. The difficult decision, which rows belong together, was
+              made once. The trace below walks the topology those two articles describe from end
+              to end. Notice how much of it is simply the WAL from Chapter 2, delivered to
+              different consumers.
             </p>
             <TracePlayer spec={fleetTrace} />
             <p className="fl-src-note">
@@ -355,35 +371,35 @@ export default function PostgresPage() {
                 <a href="https://dsf.berkeley.edu/papers/ERL-M85-95.pdf" target="_blank" rel="noreferrer">
                   Stonebraker &amp; Rowe — “The Design of POSTGRES” (Berkeley, 1986)
                 </a>
-                <p>The original design document. The no-overwrite storage manager it proposes — old versions kept, a “vacuum cleaner” process to sweep them — is MVCC and vacuum, forty years early. Read §5 and recognize Chapter 2.</p>
+                <p>The original design document. The no-overwrite storage manager it proposes, with old versions retained and a &ldquo;vacuum cleaner&rdquo; process to remove them, is the MVCC and vacuum of Chapter 2, described forty years earlier. Section 5 is the one to read.</p>
               </div>
               <div className="src">
                 <div className="s-k">The book</div>
                 <a href="https://www.interdb.jp/pg/" target="_blank" rel="noreferrer">
                   Hironobu Suzuki — “The Internals of PostgreSQL”
                 </a>
-                <p>Free, current, and the best systems-internals text on any database. Chapters 5–9 (concurrency control, vacuum, buffer manager, WAL) are this page&apos;s Chapter 2 with the diagrams at full resolution.</p>
+                <p>Free, current, and probably the best internals text written about any database. Its chapters 5 to 9, on concurrency control, vacuum, the buffer manager and the WAL, cover the same ground as Chapter 2 of this page with the diagrams at full resolution.</p>
               </div>
               <div className="src">
                 <div className="s-k">The docs</div>
                 <a href="https://www.postgresql.org/docs/current/mvcc.html" target="_blank" rel="noreferrer">
                   PostgreSQL manual — Chapter 13, “Concurrency Control”
                 </a>
-                <p>Snapshot semantics, isolation levels, and locking, stated precisely by the people who wrote it. Pair with the “Routine Vacuuming” section — the most operationally important pages in the manual.</p>
+                <p>Snapshot semantics, isolation levels and locking, stated precisely by the people who implemented them. Read it together with the &ldquo;Routine Vacuuming&rdquo; section, which is the most operationally important part of the manual.</p>
               </div>
               <div className="src">
                 <div className="s-k">The war story</div>
                 <a href="https://www.notion.so/blog/sharding-postgres-at-notion" target="_blank" rel="noreferrer">
                   Notion — “Herding elephants: lessons learned from sharding Postgres”
                 </a>
-                <p>The modern reference for escaping the single-primary wall deliberately: choosing team_id, 480 logical shards, double-writes, and the audited cutover. The sequel, “The Great Re-shard,” shows why logical-over-physical pays off.</p>
+                <p>The modern reference for leaving a single primary deliberately: the choice of team_id as the shard key, the 480 logical shards, double writes during the migration, and the audited cutover. The sequel, &ldquo;The Great Re-shard,&rdquo; shows why having more logical shards than machines paid off.</p>
               </div>
               <div className="src">
                 <div className="s-k">The adversarial read</div>
                 <a href="https://www.uber.com/blog/postgres-to-mysql-migration/" target="_blank" rel="noreferrer">
                   Uber — “Why Uber Engineering Switched from Postgres to MySQL” (2016)
                 </a>
-                <p>The sharpest public critique of the architecture you just learned: MVCC write amplification, per-version index entries, replication byte-coupling. Read it with the community rebuttals and you&apos;ll understand both systems better than either post alone.</p>
+                <p>The sharpest public critique of the architecture described on this page: MVCC write amplification, an index entry per row version, and replication that ships physical bytes. Read it alongside the community responses, and you will understand both systems better than either article alone conveys.</p>
               </div>
             </div>
           </Ch>
