@@ -1,6 +1,6 @@
 # systems comic
 
-**I asked AI to write tech commics.**
+**I worked with AI to write tech commics.**
 
 **[Read them →](https://systemscomic.com)**
 
