@@ -22,6 +22,16 @@ const CHAPTERS = [
   { id: 'sources', n: 9, title: 'Primary sources' },
 ]
 
+const CH_ID: Record<number, string> = Object.fromEntries(CHAPTERS.map((c) => [c.n, c.id]))
+
+/* Turn "Chapter N" inside a plain string into an in-page link to that chapter. */
+function withChapterLinks(text: string): React.ReactNode[] {
+  return text.split(/(Chapter \d(?!\d))/).map((part, i) => {
+    const m = /^Chapter (\d)$/.exec(part)
+    return m ? <a key={i} href={'#' + CH_ID[Number(m[1])]}>{part}</a> : part
+  })
+}
+
 const LIMITS: [string, string, string][] = [
   ['Writable primaries', '1', 'There is no native multi-master mode: every write passes through one machine. This is the deepest limit in the stack. The ladder in Chapter 5 postpones it; only sharding removes it.'],
   ['Connections', '1 OS process each', 'The default max_connections is 100, and a few hundred active backends saturate even a large machine. A pooler such as PgBouncer is standard equipment rather than an optimisation.'],
@@ -119,7 +129,7 @@ export default function PostgresPage() {
               The WAL turns out to be useful for more than crash recovery. A replica is just
               another machine that receives the same log and replays it against its own copy of
               the files, and a backup is just an archived copy of the log together with a
-              snapshot of the files. We will see both in Chapter 5 and Chapter 7.
+              snapshot of the files. We will see both in <a href="#scale-out">Chapter 5</a> and <a href="#bigfleet">Chapter 7</a>.
             </p>
             <p>
               Now consider isolation. Suppose transaction A is in the middle of updating a row
@@ -140,7 +150,7 @@ export default function PostgresPage() {
               ID of the transaction that superseded it. Every reader then decides for itself, by
               comparing those IDs with its own snapshot, which version it is allowed to see. This
               technique is known as <em>multi-version concurrency control</em> (MVCC), and we
-              will look at it closely in Chapter 2.
+              will look at it closely in <a href="#anatomy">Chapter 2</a>.
             </p>
             <p>
               Both choices have costs. With an undo area, a reader that needs an old version has
@@ -149,7 +159,7 @@ export default function PostgresPage() {
               gradually fills with versions that no transaction can see any more, and a separate
               process, called <em>vacuum</em>, has to find and remove them. A great deal of what
               goes wrong in production Postgres installations turns out to be some variation of
-              vacuum falling behind, which is why Chapter 6 spends so much time on it.
+              vacuum falling behind, which is why <a href="#ops">Chapter 6</a> spends so much time on it.
             </p>
             <p>
               One further design decision affects the operational chapters. Postgres handles each
@@ -162,8 +172,8 @@ export default function PostgresPage() {
             </p>
             <div className="note">
               <b>A familiar idea.</b> The WAL is the same idea as the append-only log at the heart
-              of Kafka, applied to 8 KB pages rather than to messages. Chapter 7 of the Kafka
-              deep-dive argues that such a log is the fundamental abstraction of distributed data
+              of Kafka, applied to 8 KB pages rather than to messages. <a href="/ddia/components/kafka#bigcluster">Chapter 7 of the Kafka
+              deep-dive</a> argues that such a log is the fundamental abstraction of distributed data
               systems; Postgres is a good example of the same idea on a single node.
             </div>
           </Ch>
@@ -200,7 +210,7 @@ export default function PostgresPage() {
               ones. <em>WAL sender</em> processes stream the log to replicas. Finally, the{' '}
               <em>statistics collector</em> maintains the counts on which the query
               planner&apos;s estimates depend. Each of these can fall behind under load, and
-              Chapter 6 describes what that looks like in each case.
+              <a href="#ops">Chapter 6</a> describes what that looks like in each case.
             </p>
           </Ch>
 
@@ -214,7 +224,7 @@ export default function PostgresPage() {
               quieter ones: whether the <em>working set</em> fits in memory, and how quickly the
               disk can fsync the WAL. If the working set no longer fits, each miss becomes a
               random read, and throughput falls off sharply rather than degrading gradually. The
-              WAL flush latency, as we saw in Chapter 2, is the floor under every commit. The
+              WAL flush latency, as we saw in <a href="#anatomy">Chapter 2</a>, is the floor under every commit. The
               envelope below lets you pick a machine shape and push the workload until one of
               its meters turns red.
             </p>
@@ -231,7 +241,7 @@ export default function PostgresPage() {
 
           <Ch id="scale-up" n={4} title="Scaling up — what a bigger box buys">
             <p>
-              Vertical scaling maps fairly directly onto the anatomy in Chapter 2. More memory is
+              Vertical scaling maps fairly directly onto the anatomy in <a href="#anatomy">Chapter 2</a>. More memory is
               usually the most valuable purchase, because it widens the range of workloads whose
               working set fits. Its returns are step-shaped rather than linear: going from a
               working set that spills out of memory to one that fits can improve throughput by
@@ -245,11 +255,11 @@ export default function PostgresPage() {
             <p>
               The diminishing returns are structural, and it is worth being clear about why.
               Every commit still passes through a single WAL stream on a single disk, however
-              fast that disk is. The vacuum work described in Chapter 2 grows with the write
+              fast that disk is. The vacuum work described in <a href="#anatomy">Chapter 2</a> grows with the write
               rate regardless of the hardware. And one very large primary is one very large unit
               of failure: failover, re-replication and restore all take time proportional to its
               size. Postgres rewards a strong primary, but past a certain point additional money
-              buys risk rather than headroom. That point is where Chapter 5 begins.
+              buys risk rather than headroom. That point is where <a href="#scale-out">Chapter 5</a> begins.
             </p>
           </Ch>
 
@@ -271,7 +281,7 @@ export default function PostgresPage() {
                 <li><b>Pool connections.</b> Put PgBouncer in transaction mode between the application and the database, so that thousands of application connections share a few dozen backends. This is the cheapest step, and it should be taken first.</li>
                 <li><b>Cache in front.</b> Serve repeated reads from Redis or an application-level cache, so that they never reach the database. Of all the steps here, this one usually removes the most load for the least effort.</li>
                 <li><b>Add read replicas</b> and route read queries to them. The application then has to take replication lag into account: a user who has just written must read from the primary.</li>
-                <li><b>Scale the primary up:</b> enough memory for the working set, and NVMe storage for the WAL. This is simple and effective, but bounded, as Chapter 4 explained.</li>
+                <li><b>Scale the primary up:</b> enough memory for the working set, and NVMe storage for the WAL. This is simple and effective, but bounded, as <a href="#scale-up">Chapter 4</a> explained.</li>
                 <li><b>Partition</b> large tables, by time or by tenant, so that each index, scan and vacuum pass touches less data. Old ranges can then be detached instead of deleted row by row.</li>
                 <li><b>Shard</b> across independent clusters, but only once one primary&apos;s write capacity is genuinely exhausted. From then on, transactions and joins across shards are no longer available.</li>
               </ol>
@@ -328,7 +338,7 @@ export default function PostgresPage() {
               scaling out later consisted of moving schemas between machines, rather than
               splitting the data again. The difficult decision, which rows belong together, was
               made once. The trace below walks the topology those two articles describe from end
-              to end. Notice how much of it is simply the WAL from Chapter 2, delivered to
+              to end. Notice how much of it is simply the WAL from <a href="#anatomy">Chapter 2</a>, delivered to
               different consumers.
             </p>
             <TracePlayer spec={fleetTrace} />
@@ -349,7 +359,7 @@ export default function PostgresPage() {
                   <tr key={r[0]}>
                     <td>{r[0]}</td>
                     <td><code>{r[1]}</code></td>
-                    <td>{r[2]}</td>
+                    <td>{withChapterLinks(r[2])}</td>
                   </tr>
                 ))}
               </tbody>
@@ -358,7 +368,7 @@ export default function PostgresPage() {
               {FAILS.map((f) => (
                 <div className="fail" key={f[0]}>
                   <div className="fn">{f[0]}</div>
-                  <p className="fd">{f[1]}</p>
+                  <p className="fd">{withChapterLinks(f[1])}</p>
                 </div>
               ))}
             </div>
@@ -371,14 +381,14 @@ export default function PostgresPage() {
                 <a href="https://dsf.berkeley.edu/papers/ERL-M85-95.pdf" target="_blank" rel="noreferrer">
                   Stonebraker &amp; Rowe — “The Design of POSTGRES” (Berkeley, 1986)
                 </a>
-                <p>The original design document. The no-overwrite storage manager it proposes, with old versions retained and a &ldquo;vacuum cleaner&rdquo; process to remove them, is the MVCC and vacuum of Chapter 2, described forty years earlier. Section 5 is the one to read.</p>
+                <p>The original design document. The no-overwrite storage manager it proposes, with old versions retained and a &ldquo;vacuum cleaner&rdquo; process to remove them, is the MVCC and vacuum of <a href="#anatomy">Chapter 2</a>, described forty years earlier. Section 5 is the one to read.</p>
               </div>
               <div className="src">
                 <div className="s-k">The book</div>
                 <a href="https://www.interdb.jp/pg/" target="_blank" rel="noreferrer">
                   Hironobu Suzuki — “The Internals of PostgreSQL”
                 </a>
-                <p>Free, current, and probably the best internals text written about any database. Its chapters 5 to 9, on concurrency control, vacuum, the buffer manager and the WAL, cover the same ground as Chapter 2 of this page with the diagrams at full resolution.</p>
+                <p>Free, current, and probably the best internals text written about any database. Its chapters 5 to 9, on concurrency control, vacuum, the buffer manager and the WAL, cover the same ground as <a href="#anatomy">Chapter 2</a> of this page with the diagrams at full resolution.</p>
               </div>
               <div className="src">
                 <div className="s-k">The docs</div>
