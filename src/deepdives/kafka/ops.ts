@@ -30,7 +30,7 @@ export const METRICS: MetricCard[] = [
       'Profile the handler / downstream latency — often the real culprit',
       'In a genuine emergency, temporarily raise retention to stop data from aging out while you fix the root cause',
     ],
-    tie: 'This is the consumer-parallelism ceiling from Chapter 5, now observed instead of predicted.',
+    tie: 'This is the consumer-parallelism ceiling from <a href="#scale-out">Chapter 5</a>, now observed instead of predicted.',
   },
   {
     metric: 'Under-replicated partitions',
@@ -52,7 +52,7 @@ export const METRICS: MetricCard[] = [
       'Do NOT roll-restart the cluster blindly — that removes more replicas and makes it worse',
       'Once identified, relieve load (move leadership off it) or replace the broker',
     ],
-    tie: 'Ties to the ISR replication model from the produce trace in Chapter 2.',
+    tie: 'Ties to the ISR replication model from the produce trace in <a href="#anatomy">Chapter 2</a>.',
   },
   {
     metric: 'Offline partitions',
@@ -91,7 +91,7 @@ export const METRICS: MetricCard[] = [
       'Restore controller nodes; the quorum re-elects one leader automatically',
       'Never run an even number of controllers — you want a clear majority (3 or 5)',
     ],
-    tie: 'This is the KRaft metadata quorum from Chapter 2 — itself a replicated log.',
+    tie: 'This is the KRaft metadata quorum from <a href="#anatomy">Chapter 2</a> — itself a replicated log.',
   },
   {
     metric: 'Request handler idle ratio',
@@ -108,11 +108,11 @@ export const METRICS: MetricCard[] = [
       'Slow disk making each append take longer, tying up threads',
     ],
     respond: [
-      'Check bytes-in/out vs the NIC first — you may simply be at the envelope from Chapter 3',
+      'Check bytes-in/out vs the NIC first — you may simply be at the envelope from <a href="#hardware">Chapter 3</a>',
       'Rebalance leadership to spread load off the hot broker',
       'Add brokers (real fix); raise num.io.threads as a stopgap',
     ],
-    tie: 'This is the hardware envelope from Chapter 3, observed live.',
+    tie: 'This is the hardware envelope from <a href="#hardware">Chapter 3</a>, observed live.',
   },
   {
     metric: 'Request latency p99',
@@ -172,7 +172,7 @@ export const METRICS: MetricCard[] = [
       'Add brokers/disks, or enable tiered storage to offload cold segments to object storage',
       'Alert at 75%, not 95% — you need lead time before a broker dies',
     ],
-    tie: 'This is the disk-capacity meter from the Chapter 3 envelope, hit for real.',
+    tie: 'This is the disk-capacity meter from the <a href="#hardware">Chapter 3</a> envelope, hit for real.',
   },
 ]
 

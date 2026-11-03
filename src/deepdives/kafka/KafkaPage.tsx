@@ -23,6 +23,16 @@ const CHAPTERS = [
   { id: 'sources', n: 9, title: 'Primary sources' },
 ]
 
+const CH_ID: Record<number, string> = Object.fromEntries(CHAPTERS.map((c) => [c.n, c.id]))
+
+/* Turn "Chapter N" inside a plain string into an in-page link to that chapter. */
+function withChapterLinks(text: string): React.ReactNode[] {
+  return text.split(/(Chapter \d(?!\d))/).map((part, i) => {
+    const m = /^Chapter (\d)$/.exec(part)
+    return m ? <a key={i} href={'#' + CH_ID[Number(m[1])]}>{part}</a> : part
+  })
+}
+
 const LIMITS: [string, string, string][] = [
   ['Throughput / partition', '~10 MB/s (order of magnitude)', 'One partition is one leader append path on one broker. Load is spread by adding partitions, not by making one faster.'],
   ['Consumers / group', '≤ partition count', 'The hard cap on parallelism within a group. Consumers beyond it sit idle.'],
@@ -134,7 +144,7 @@ export default function KafkaPage() {
               is orders of magnitude slower. By restricting its storage engine to appends and
               sequential scans, Kafka uses the fastest path every device has, and it can rely on
               the operating system&apos;s page cache instead of managing a buffer pool of its own.
-              Jay Kreps&apos;s essay <em>The Log</em>, listed in Chapter 9, is the canonical
+              Jay Kreps&apos;s essay <em>The Log</em>, listed in <a href="#sources">Chapter 9</a>, is the canonical
               statement of this idea.
             </div>
           </Ch>
@@ -284,9 +294,9 @@ export default function KafkaPage() {
             <ClusterZoom />
             <h3>The techniques that do not show up in the picture</h3>
             <ul className="clean">
-              <li><b>Tiered storage (KIP-405).</b> Cold log segments are moved to object storage such as S3 or GCS, so that brokers keep only the recent tail on local disk, and the disk-capacity limit from Chapter 3 stops being the constraint.</li>
+              <li><b>Tiered storage (KIP-405).</b> Cold log segments are moved to object storage such as S3 or GCS, so that brokers keep only the recent tail on local disk, and the disk-capacity limit from <a href="#hardware">Chapter 3</a> stops being the constraint.</li>
               <li><b>Target about 80% of sustained maximum.</b> The headroom is what absorbs a broker loss, or a recovering replica writing at full speed, without pushing a surviving broker past its own limit.</li>
-              <li><b>KRaft in place of ZooKeeper.</b> The metadata quorum from Chapter 2 replaced ZooKeeper precisely to lift the per-cluster partition ceiling, which used to force even more fragmentation than the table shows.</li>
+              <li><b>KRaft in place of ZooKeeper.</b> The metadata quorum from <a href="#anatomy">Chapter 2</a> replaced ZooKeeper precisely to lift the per-cluster partition ceiling, which used to force even more fragmentation than the table shows.</li>
             </ul>
             <p className="fl-src-note">
               Figures:{' '}
@@ -305,7 +315,7 @@ export default function KafkaPage() {
                   <tr key={r[0]}>
                     <td>{r[0]}</td>
                     <td><code>{r[1]}</code></td>
-                    <td>{r[2]}</td>
+                    <td>{withChapterLinks(r[2])}</td>
                   </tr>
                 ))}
               </tbody>
@@ -314,7 +324,7 @@ export default function KafkaPage() {
               {FAILS.map((f) => (
                 <div className="fail" key={f[0]}>
                   <div className="fn">{f[0]}</div>
-                  <p className="fd">{f[1]}</p>
+                  <p className="fd">{withChapterLinks(f[1])}</p>
                 </div>
               ))}
             </div>

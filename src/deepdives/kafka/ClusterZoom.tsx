@@ -100,7 +100,7 @@ const STEPS: Step[] = [
   {
     title: 'Into the broker',
     prose:
-      'Zoomed all the way in, a broker is simply holding partition replicas, some as leader and some as follower, each an append-only log. Inside this box is the machinery of Chapter 2: the network threads, the page cache, the sequential append. The zoom ends exactly where the anatomy began.',
+      'Zoomed all the way in, a broker is simply holding partition replicas, some as leader and some as follower, each an append-only log. Inside this box is the machinery of <a href="#anatomy">Chapter 2</a>: the network threads, the page cache, the sequential append. The zoom ends exactly where the anatomy began.',
     frame: { id: 'broker', name: '', x: 96, y: 262, w: 112, h: 62 },
   },
 ]
