@@ -30,7 +30,7 @@ export const METRICS: MetricCard[] = [
       'Correlate with WAL volume on the primary — a batch job may be the real culprit',
       'If lag is chronic, the replica is under-provisioned for the read + replay load: bigger box or more replicas',
     ],
-    tie: 'Replicas replay the WAL from the Chapter 2 trace — lag is that replay falling behind.',
+    tie: 'Replicas replay the WAL from the <a href="#anatomy">Chapter 2</a> trace — lag is that replay falling behind.',
   },
   {
     metric: 'Connection saturation',
@@ -42,7 +42,7 @@ export const METRICS: MetricCard[] = [
       'At the wall, new connections are refused — <b>every service that needs the database starts erroring at once</b>. Approaching it, the primary wastes itself on context switching and per-backend memory, so everything slows first.',
     causes: [
       'No pooler, or pool sizes multiplied by a scaled-out app fleet',
-      'Slow queries holding connections longer, so the fleet opens more (the Chapter 6 cascade)',
+      'Slow queries holding connections longer, so the fleet opens more (the <a href="#ops">Chapter 6</a> cascade)',
       'Restart stampede — every pod reconnecting simultaneously',
       '“Idle in transaction” backends leaking from an ORM or crashed worker',
     ],
@@ -52,7 +52,7 @@ export const METRICS: MetricCard[] = [
       'pg_terminate_backend the worst offenders to relieve pressure now',
       'Cap total app-side pool size to what the primary actually handles (~2–4× cores active)',
     ],
-    tie: 'One process per connection — step 1 of the Chapter 2 trace — is why this number is so unforgiving.',
+    tie: 'One process per connection — step 1 of the <a href="#anatomy">Chapter 2</a> trace — is why this number is so unforgiving.',
   },
   {
     metric: 'Transaction ID age',
@@ -147,7 +147,7 @@ export const METRICS: MetricCard[] = [
     healthy: '99%+ for OLTP. The interesting signal is a downward trend, not the absolute number.',
     means: 'The share of page requests served from shared buffers. (A “miss” may still hit the OS page cache — this is an upper bound on real disk reads, so read it as a trend.)',
     breaks:
-      'When the working set outgrows memory, every miss is a random disk read and throughput falls off a cliff rather than degrading gracefully — the knee in the Chapter 3 envelope. Falling hit ratio is your earliest warning that data growth is outrunning RAM.',
+      'When the working set outgrows memory, every miss is a random disk read and throughput falls off a cliff rather than degrading gracefully — the knee in the <a href="#hardware">Chapter 3</a> envelope. Falling hit ratio is your earliest warning that data growth is outrunning RAM.',
     causes: [
       'Working set growth — the product got popular, the hot data no longer fits',
       'Bloat inflating the working set (same rows, more pages)',
@@ -159,7 +159,7 @@ export const METRICS: MetricCard[] = [
       'Find the churner: pg_stat_statements ordered by shared_blks_read',
       'Add RAM or archive cold data — cheaper than the sharding conversation',
     ],
-    tie: 'The working-set-vs-RAM meter from Chapter 3, observed live.',
+    tie: 'The working-set-vs-RAM meter from <a href="#hardware">Chapter 3</a>, observed live.',
   },
   {
     metric: 'Checkpoint cadence',
@@ -201,7 +201,7 @@ export const METRICS: MetricCard[] = [
       'ANALYZE the table on a suspected plan flip — often a one-command fix',
       'Check pg_locks / wait events before blaming hardware',
     ],
-    tie: 'Every failure mode in Chapter 8 eventually surfaces here — which is why paging on p99 alone tells you something hurts, not what.',
+    tie: 'Every failure mode in <a href="#boundaries">Chapter 8</a> eventually surfaces here — which is why paging on p99 alone tells you something hurts, not what.',
   },
 ]
 

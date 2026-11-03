@@ -52,7 +52,7 @@ export const queryTrace: TraceSpec = {
     {
       title: 'Plan — the cost-based gamble',
       prose:
-        'There are usually many ways of executing the same query: scanning the whole table or using an index, joining tables in one order or another, using a hash join or a merge join. The planner cannot try them all, so it estimates the cost of each candidate using statistics that a previous <code>ANALYZE</code> gathered: the number of rows, a histogram of the values in each column, and how well the physical order of the table correlates with the index. It then chooses the plan with the lowest estimated cost. Note that this is an <em>estimate</em>, and the rest of the system trusts it. If the statistics are out of date, the planner may confidently choose a plan far worse than the one it chose yesterday, which is how a query that has taken two milliseconds for a year comes to take forty seconds one night. Chapter 8 discusses this <em>plan flip</em> in more detail.',
+        'There are usually many ways of executing the same query: scanning the whole table or using an index, joining tables in one order or another, using a hash join or a merge join. The planner cannot try them all, so it estimates the cost of each candidate using statistics that a previous <code>ANALYZE</code> gathered: the number of rows, a histogram of the values in each column, and how well the physical order of the table correlates with the index. It then chooses the plan with the lowest estimated cost. Note that this is an <em>estimate</em>, and the rest of the system trusts it. If the statistics are out of date, the planner may confidently choose a plan far worse than the one it chose yesterday, which is how a query that has taken two milliseconds for a year comes to take forty seconds one night. <a href="#boundaries">Chapter 8</a> discusses this <em>plan flip</em> in more detail.',
       focus: ['planner'],
       particles: [{ from: 'planner', to: 'exec', color: C.machine }],
     },
@@ -73,7 +73,7 @@ export const queryTrace: TraceSpec = {
     {
       title: 'WAL first — always',
       prose:
-        'Before the modified page can be written to disk, a description of the change is appended to the WAL buffers as a <em>redo record</em>, which says in effect: on page X, at offset Y, these bytes. The order matters. The log record must reach disk before the page does, which is where the name write-ahead log comes from. The reason is the torn-page problem from Chapter 1: a page is 8 KB and a power failure can interrupt its write, leaving no way to tell what it used to contain, whereas a log record is small, is appended rather than overwritten, and is either present or absent. The log is therefore the authoritative record, and the data files are a cache of it that may lag behind. Readers of the Kafka deep-dive will recognize the same idea applied to messages rather than pages.',
+        'Before the modified page can be written to disk, a description of the change is appended to the WAL buffers as a <em>redo record</em>, which says in effect: on page X, at offset Y, these bytes. The order matters. The log record must reach disk before the page does, which is where the name write-ahead log comes from. The reason is the torn-page problem from <a href="#abstraction">Chapter 1</a>: a page is 8 KB and a power failure can interrupt its write, leaving no way to tell what it used to contain, whereas a log record is small, is appended rather than overwritten, and is either present or absent. The log is therefore the authoritative record, and the data files are a cache of it that may lag behind. Readers of the Kafka deep-dive will recognize the same idea applied to messages rather than pages.',
       focus: ['exec', 'walbuf'],
       particles: [{ from: 'exec', to: 'walbuf', color: C.wal }],
     },
@@ -141,7 +141,7 @@ export const mvccTrace: TraceSpec = {
     {
       title: 'UPDATE = insert a rival version',
       prose:
-        'Transaction 205 updates the row. A second version is inserted elsewhere on the page with <code>xmin = 205</code>, and the first version is stamped with <code>xmax = 205</code>. If the update changed a column that is indexed, every index on the table also needs a new entry pointing at the new version, because an index entry refers to a physical location and the new version is at a different one. A single logical UPDATE has thus become one heap insert plus one insert per index. Uber’s well-known critique of Postgres, listed in Chapter 9, is largely about this multiplication.',
+        'Transaction 205 updates the row. A second version is inserted elsewhere on the page with <code>xmin = 205</code>, and the first version is stamped with <code>xmax = 205</code>. If the update changed a column that is indexed, every index on the table also needs a new entry pointing at the new version, because an index entry refers to a physical location and the new version is at a different one. A single logical UPDATE has thus become one heap insert plus one insert per index. Uber’s well-known critique of Postgres, listed in <a href="#sources">Chapter 9</a>, is largely about this multiplication.',
       focus: ['wtx', 'v2', 'idx'],
       particles: [
         { from: 'wtx', to: 'v2', color: C.vac, via: [{ x: 12.5, y: 2 }, { x: 60, y: 2 }] },
@@ -158,7 +158,7 @@ export const mvccTrace: TraceSpec = {
     {
       title: 'The dead pile up',
       prose:
-        'Once no live snapshot can still see Version 1, it is said to be <em>dead</em>. It still occupies space on the page and entries in the indexes, and nothing reclaims that space inline, because updates and deletes in Postgres only ever add. How far back the cleanup can reach is determined by the oldest snapshot anywhere in the system, known as the <em>xmin horizon</em>. A single session that executed <code>BEGIN</code> and then went idle therefore prevents dead versions from being removed in every table of the cluster. This is worth remembering, since it is the root cause of the cascade in Chapter 6.',
+        'Once no live snapshot can still see Version 1, it is said to be <em>dead</em>. It still occupies space on the page and entries in the indexes, and nothing reclaims that space inline, because updates and deletes in Postgres only ever add. How far back the cleanup can reach is determined by the oldest snapshot anywhere in the system, known as the <em>xmin horizon</em>. A single session that executed <code>BEGIN</code> and then went idle therefore prevents dead versions from being removed in every table of the cluster. This is worth remembering, since it is the root cause of the cascade in <a href="#ops">Chapter 6</a>.',
       focus: ['v1', 'rtx'],
     },
     {
@@ -184,14 +184,14 @@ export const mvccTrace: TraceSpec = {
     {
       title: 'The doomsday counter',
       prose:
-        'Transaction IDs are 32-bit integers and are compared in a circle, modulo 2<sup>32</sup>. To transaction 3 billion, transaction 100 looks as though it lies in the future, so a very old row that was never touched again would eventually become invisible to every query. Vacuum prevents this by <em>freezing</em> old tuples, which marks them as visible to all transactions regardless of ID. If freezing falls roughly two billion transactions behind, Postgres first emits warnings and then, about three million transactions short of wraparound, refuses to accept new writes rather than risk losing data. Every serious installation monitors <code>age(datfrozenxid)</code>; Chapter 6 shows the corresponding alert.',
+        'Transaction IDs are 32-bit integers and are compared in a circle, modulo 2<sup>32</sup>. To transaction 3 billion, transaction 100 looks as though it lies in the future, so a very old row that was never touched again would eventually become invisible to every query. Vacuum prevents this by <em>freezing</em> old tuples, which marks them as visible to all transactions regardless of ID. If freezing falls roughly two billion transactions behind, Postgres first emits warnings and then, about three million transactions short of wraparound, refuses to accept new writes rather than risk losing data. Every serious installation monitors <code>age(datfrozenxid)</code>; <a href="#ops">Chapter 6</a> shows the corresponding alert.',
       focus: ['av'],
       particles: [{ from: 'av', to: 'v2', color: C.vac }],
     },
   ],
 }
 
-/* ---- Chapter 7: a production fleet, walked end to end ---- */
+/* ---- <a href="#bigfleet">Chapter 7</a>: a production fleet, walked end to end ---- */
 export const fleetTrace: TraceSpec = {
   title: 'A production Postgres fleet — follow the WAL',
   aspect: 0.5,

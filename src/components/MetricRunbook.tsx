@@ -66,7 +66,7 @@ function Card({ card, open, onToggle }: { card: MetricCard; open: boolean; onTog
               </ol>
             </div>
           </div>
-          {card.tie && <div className="rb-tie">{card.tie}</div>}
+          {card.tie && <div className="rb-tie" dangerouslySetInnerHTML={{ __html: card.tie }} />}
         </div>
       )}
     </div>
