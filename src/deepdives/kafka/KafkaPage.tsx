@@ -23,25 +23,35 @@ const CHAPTERS = [
   { id: 'sources', n: 9, title: 'Primary sources' },
 ]
 
+const CH_ID: Record<number, string> = Object.fromEntries(CHAPTERS.map((c) => [c.n, c.id]))
+
+/* Turn "Chapter N" inside a plain string into an in-page link to that chapter. */
+function withChapterLinks(text: string): React.ReactNode[] {
+  return text.split(/(Chapter \d(?!\d))/).map((part, i) => {
+    const m = /^Chapter (\d)$/.exec(part)
+    return m ? <a key={i} href={'#' + CH_ID[Number(m[1])]}>{part}</a> : part
+  })
+}
+
 const LIMITS: [string, string, string][] = [
-  ['Throughput / partition', '~10 MB/s (order of magnitude)', 'One partition = one leader append path on one broker. Spread load by adding partitions.'],
-  ['Consumers / group', '≤ partition count', 'The hard cap on parallelism. Extra consumers idle.'],
-  ['Partitions / cluster', 'hundreds of thousands+ (KRaft)', 'The KRaft metadata quorum lifted the old ZooKeeper-era ceiling; each partition still costs file handles, memory, and rebalance time.'],
-  ['Ordering', 'Per-partition only', 'Global ordering requires a single partition — which caps you at one consumer. Order by key instead.'],
-  ['Rebalancing', 'Seconds of pause', 'Consumer churn reshuffles partition ownership. Cooperative/static membership softens it.'],
-  ['Replication', '×RF disk & network', 'acks=all waits on the ISR; RF=3 triples storage and doubles-plus inter-broker traffic.'],
-  ['fsync', 'Off by default', 'Durability comes from replication, not flush. Single-DC power loss across all replicas is the (accepted) residual risk.'],
+  ['Throughput / partition', '~10 MB/s (order of magnitude)', 'One partition is one leader append path on one broker. Load is spread by adding partitions, not by making one faster.'],
+  ['Consumers / group', '≤ partition count', 'The hard cap on parallelism within a group. Consumers beyond it sit idle.'],
+  ['Partitions / cluster', 'hundreds of thousands+ (KRaft)', 'The KRaft quorum lifted the ZooKeeper-era ceiling, but each partition still costs file handles, memory and rebalance time.'],
+  ['Ordering', 'Per-partition only', 'Global ordering requires a single partition, which limits the topic to one consumer. Order by key instead.'],
+  ['Rebalancing', 'Seconds of pause', 'When consumers join or leave, partition ownership is reshuffled. Cooperative and static membership reduce the pause but do not remove it.'],
+  ['Replication', '×RF disk & network', 'acks=all waits for the in-sync replicas. A replication factor of 3 triples storage and more than doubles inter-broker traffic.'],
+  ['fsync', 'Off by default', 'Durability comes from replication rather than from flushing. Losing power to every replica at once, in one data centre, is the accepted residual risk.'],
 ]
 
 const FAILS: [string, string][] = [
-  ['Under-partitioned topic', 'You picked 6 partitions, now need 60 consumers. Raising partitions rehashes keys and breaks per-key ordering — a painful migration. Over-provision partitions early.'],
-  ['Consumer lag blowup', 'Consumers slower than producers means lag grows without bound; breach retention and unread data is deleted. Alert on lag, not CPU.'],
-  ['Page-cache pollution', 'A backfilling consumer pages in cold segments, evicting the hot tail — suddenly tail consumers hit disk too. Isolate backfills; consider follower fetching or tiered storage.'],
-  ['Rebalance storms', 'Flaky consumers repeatedly join/leave, pausing the whole group each time. Tune session timeouts; use static membership.'],
-  ['Hot partition from skewed keys', 'One whale key dominates a partition while others idle. Compound keys or route hot keys separately.'],
-  ['ISR shrink under load', 'A slow follower falls out of the ISR; with acks=all and min.insync.replicas=2, one more failure stops writes entirely. Watch under-replicated partitions.'],
-  ['Unclean leader election', 'Electing an out-of-sync replica after failures loses committed data. It is off by default — leave it off unless availability truly beats durability.'],
-  ['Poison-pill message', "One un-processable message blocks its partition's offset from advancing. Dead-letter topic + skip-with-log."],
+  ['Under-partitioned topic', 'A topic was created with 6 partitions and now needs 60 consumers. Raising the partition count changes which partition each key maps to and breaks per-key ordering, so the migration is painful. Partitions are cheap to over-provision at creation and expensive to add later.'],
+  ['Consumer lag blowup', 'When consumers are slower than producers, lag grows without bound until it exceeds the retention period, at which point unread data is deleted. Alert on lag rather than on CPU.'],
+  ['Page-cache pollution', 'A consumer backfilling from history reads cold segments from disk into the page cache, evicting the recent tail, so consumers that were being served from memory now hit disk too. Backfills should be isolated, or served through follower fetching or tiered storage.'],
+  ['Rebalance storms', 'Unreliable consumers repeatedly join and leave the group, and each change pauses the whole group while partitions are reassigned. Session timeouts need tuning, and static membership removes the churn.'],
+  ['Hot partition from skewed keys', 'One very large key dominates a single partition while the others sit idle. Compound keys spread it, and a hot key can also be routed separately.'],
+  ['ISR shrink under load', 'A slow follower drops out of the in-sync replica set. With acks=all and min.insync.replicas set to 2, one further failure stops writes entirely. The under-replicated partitions metric is the warning.'],
+  ['Unclean leader election', 'Electing a replica that was not in sync, after a failure, loses data that was already acknowledged. It is off by default and should stay off unless availability genuinely matters more than durability.'],
+  ['Poison-pill message', 'A single message that cannot be processed stops its partition\u2019s offset from advancing. The remedy is a dead-letter topic and skipping the message with a log entry.'],
 ]
 
 function Ch({ id, n, title, children }: { id: string; n: number; title: string; children: React.ReactNode }) {
@@ -77,12 +87,13 @@ export default function KafkaPage() {
           <p className="h-kicker">Deep-dive · distributed log</p>
           <h1 className="title">Apache Kafka</h1>
           <p className="lede">
-            Kafka is what happens when you take one idea — <b>a replicated, append-only log on the
-            filesystem</b> — and refuse to compromise on it. Every famous Kafka property
-            (throughput, replay, consumer groups, exactly-once) and every famous Kafka limitation
-            (partition counts, rebalances, ordering scope) falls out of that single design bet.
-            This page walks the system the way you&apos;d want it explained: <b>what one broker
-            actually does</b>, what hardware it consumes, and only then how it scales.
+            Kafka is the result of taking one idea, <em>a replicated append-only log stored as
+            ordinary files</em>, and declining to add anything that would compromise it. The
+            properties Kafka is known for (throughput, replay, consumer groups, exactly-once
+            delivery) and the limitations it is equally known for (partition counts, rebalances,
+            the scope of ordering) all follow from that one decision. This page walks the system
+            in the order you would want it explained: what one broker does with a request, what
+            hardware that path consumes, and only then how it scales.
           </p>
 
           <IdeaStrip
@@ -98,73 +109,89 @@ export default function KafkaPage() {
 
           <Ch id="abstraction" n={1} title="The core abstraction: the log">
             <p>
-              A Kafka <b>topic</b> is a named log, split into <b>partitions</b>. A partition is the
-              real unit of everything: an ordered, immutable sequence of records where the only
-              write is <em>append</em> and a reader&apos;s only state is an <b>offset</b> — a
-              number marking how far it has read. Records aren&apos;t deleted when consumed; they
-              age out by retention policy (time, size, or compaction by key).
+              Consider the problem Kafka was built for. Many services produce a stream of events,
+              and many other services want to read those events, at different speeds, starting at
+              different points, and sometimes again from the beginning after a bug. A traditional
+              message queue handles this by tracking, for every message and every consumer,
+              whether that message has been delivered and acknowledged, and by deleting the
+              message once everyone has it. That bookkeeping costs the broker work per message
+              per consumer, and once a message has been deleted it cannot be read again. A
+              database handles it by indexing the events, which costs a random write per insert
+              and a random read per lookup.
             </p>
             <p>
-              This inversion — <b>the broker doesn&apos;t track consumers; consumers track
-              themselves</b> — is what makes the rest cheap. A queue, pub/sub fan-out, replay from
-              history, stream processing state, and change-data-capture are all just <em>different
-              offsets held by different readers over the same bytes</em>. On disk a partition is a
-              directory of <b>segment files</b> (the newest is the &ldquo;active&rdquo; segment
-              taking appends) plus sparse index files — which means deleting old data is
-              &ldquo;unlink a file,&rdquo; not &ldquo;compact a B-tree.&rdquo;
+              Kafka takes a third approach. A <em>topic</em> is a named log, split into{' '}
+              <em>partitions</em>. A partition is an ordered, immutable sequence of records to
+              which the only possible write is an append. A reader&apos;s entire state is an{' '}
+              <em>offset</em>: a number recording how far into the partition it has read. Records
+              are not deleted when they are consumed. They are retained for a period of time, up
+              to a size, or until superseded by a later record with the same key (compaction),
+              and then removed.
+            </p>
+            <p>
+              The consequence is that the broker keeps no state about its consumers at all; each
+              consumer keeps track of itself. This is what makes everything else cheap. A queue,
+              publish/subscribe fan-out, replaying history, the state of a stream processor, and
+              change data capture from a database are all simply different offsets held by
+              different readers over the same bytes. On disk, a partition is a directory of{' '}
+              <em>segment files</em>, the newest of which (the active segment) receives appends,
+              together with sparse index files. Deleting old data therefore means unlinking a
+              file rather than compacting a B-tree.
             </p>
             <div className="note">
-              <b>Why an append-only log?</b> Sequential disk I/O runs at hundreds of MB/s on
-              anything — even spinning disks — while random I/O is orders of magnitude slower.
-              Restricting the storage engine to appends and sequential scans lets Kafka ride the
-              fastest path every storage device has, and lean on the OS page cache instead of
-              managing its own buffer pool. Jay Kreps&apos; essay <em>The Log</em> (chapter 7) is
-              the canonical statement of this idea.
+              <b>Why an append-only log?</b> Sequential I/O runs at hundreds of megabytes per
+              second on almost any storage device, including spinning disks, whereas random I/O
+              is orders of magnitude slower. By restricting its storage engine to appends and
+              sequential scans, Kafka uses the fastest path every device has, and it can rely on
+              the operating system&apos;s page cache instead of managing a buffer pool of its own.
+              Jay Kreps&apos;s essay <em>The Log</em>, listed in <a href="#sources">Chapter 9</a>, is the canonical
+              statement of this idea.
             </div>
           </Ch>
 
           <Ch id="anatomy" n={2} title="Anatomy of a single broker">
             <p>
-              A broker is a surprisingly thin orchestration layer over the operating system:
-              network threads shuttle bytes, I/O threads append to files, and the OS page cache
-              does almost all the caching and buffering. Press play and follow one produce request
-              with <code>acks=all</code> through the machinery:
+              A broker is a surprisingly thin layer over the operating system. Network threads
+              move bytes between sockets and queues, I/O threads append to files, and the OS page
+              cache does almost all of the caching and buffering. The following trace follows one
+              produce request with <code>acks=all</code> through that machinery.
             </p>
             <TracePlayer spec={produceTrace} />
             <p>
-              The read path is even more radical — on the happy path the broker never copies your
-              data into its own memory at all:
+              The read path goes further still: on the common path, the broker never copies your
+              data into its own memory at all.
             </p>
             <TracePlayer spec={consumeTrace} />
             <h3>The background cast</h3>
             <p>
-              Around these two paths run the maintenance loops: <b>log cleaner</b> threads perform
-              key-based compaction; the <b>retention</b> task deletes whole aged-out segments;{' '}
-              <b>replica fetchers</b> keep this broker&apos;s follower partitions in sync with
-              their leaders elsewhere; and the <b>controller</b> — since Kafka 4.0 a{' '}
-              <b>KRaft quorum</b> (Raft-replicated metadata log, no more ZooKeeper) — assigns
-              partition leadership and propagates cluster metadata. Note the symmetry: cluster
-              metadata itself is stored as <em>a replicated log</em>. It&apos;s logs all the way
-              down.
+              Around these two paths run the maintenance loops. <em>Log cleaner</em> threads
+              perform compaction by key. The <em>retention</em> task deletes whole segments once
+              they have aged out. <em>Replica fetchers</em> keep this broker&apos;s follower
+              partitions in sync with their leaders on other brokers. And the{' '}
+              <em>controller</em>, which since Kafka 4.0 is a KRaft quorum (a Raft-replicated
+              metadata log, replacing ZooKeeper), assigns partition leadership and propagates
+              cluster metadata. Note the symmetry: the cluster&apos;s own metadata is stored as a
+              replicated log. It is logs all the way down.
             </p>
           </Ch>
 
           <Ch id="hardware" n={3} title="The hardware envelope">
             <p>
-              Kafka&apos;s resource profile is unusual: brokers <b>move bytes rather than compute</b>,
-              so CPU is rarely the wall (compression and TLS are the exceptions). Confluent&apos;s
-              production baseline is telling: <b>24 cores, 64 GB RAM — but only ~6 GB of JVM
-              heap</b>, with everything else deliberately left to the OS page cache; <b>12×1 TB
-              disks in RAID 10</b> (or JBOD data dirs) on XFS/ext4, valued for sequential
-              throughput rather than IOPS; and ordinary 1–10 GbE networking. Dedicated KRaft
-              controllers are tiny (4 cores / 4 GB / 64 GB SSD) — they replicate metadata, not
-              data.
+              Kafka&apos;s resource profile is unusual among data systems: brokers move bytes
+              rather than compute on them, so CPU is seldom the binding resource (compression and
+              TLS are the exceptions). Confluent&apos;s production baseline is revealing: 24 cores
+              and 64 GB of RAM, of which only about 6 GB is JVM heap, with the rest deliberately
+              left to the OS page cache; twelve 1 TB disks in RAID 10 or as separate data
+              directories on XFS or ext4, chosen for sequential throughput rather than IOPS; and
+              ordinary 1 to 10 GbE networking. Dedicated KRaft controllers are small machines (4
+              cores, 4 GB, a 64 GB SSD), since they replicate metadata rather than data.
             </p>
             <p>
-              The reason the <b>network</b> is usually the first wall is replication arithmetic:
-              one MB/s of producer traffic becomes RF MB/s of cluster disk-write and{' '}
-              <code>(RF−1) + consumers</code> MB/s of egress. Pick a broker shape and push the
-              workload until a meter goes red:
+              The reason the network is usually the first limit reached is the arithmetic of
+              replication. One megabyte per second of producer traffic becomes RF megabytes per
+              second of disk writes across the cluster, and <code>(RF−1) + consumers</code>{' '}
+              megabytes per second of egress from the leader. The envelope below lets you choose
+              a broker shape and push the workload until one of its meters turns red.
             </p>
             <HardwareEnvelope />
             <p className="fl-src-note">
@@ -178,73 +205,78 @@ export default function KafkaPage() {
 
           <Ch id="scale-up" n={4} title="Scaling up — what a bigger box buys">
             <p>
-              Vertical scaling maps cleanly onto the anatomy. A <b>faster NIC</b> (10→25→100 GbE)
-              raises the usual binding resource linearly. <b>More disks</b> striped or as JBOD add
-              sequential throughput and retention capacity. <b>More RAM</b> widens the page-cache
-              window — how many minutes of tail data stay in memory for consumers and replication
-              to read for free. <b>More cores</b> only matter when compression, TLS, or very high
-              partition counts push CPU.
+              Vertical scaling maps fairly directly onto the anatomy. A faster network interface
+              (10, 25 or 100 GbE) raises the usual binding resource linearly. More disks, whether
+              striped or as separate data directories, add sequential throughput and retention
+              capacity. More memory widens the page-cache window, that is, how many minutes of
+              recent data stay in memory for consumers and replication to read without touching
+              disk. More cores matter only when compression, TLS or a very high partition count
+              has made CPU the constraint.
             </p>
             <p>
-              The diminishing returns are also structural: a single partition&apos;s writes still
-              funnel through one leader&apos;s append path no matter the hardware, so per-partition
-              throughput has a per-core-ish ceiling; and one giant broker is a bigger blast radius
-              — when it dies, re-replicating terabytes takes hours and hammers the survivors.
-              Kafka&apos;s sweet spot is <em>moderately</em> beefy brokers, many of them.
+              The diminishing returns are structural here too. A single partition&apos;s writes
+              still pass through one leader&apos;s append path regardless of the hardware, so
+              per-partition throughput has a ceiling roughly on the scale of one core. And one
+              very large broker is a large unit of failure: when it dies, re-replicating terabytes
+              takes hours and loads the surviving brokers heavily. Kafka&apos;s sweet spot is many
+              moderately large brokers rather than a few enormous ones.
             </p>
           </Ch>
 
           <Ch id="scale-out" n={5} title="Scaling out — partitions, brokers, and the quorum">
             <p>
-              Horizontal scale has three independent axes. <b>Partitions</b> spread a topic&apos;s
-              load and cap consumer parallelism — the knob you must size <em>up front</em>, because
-              raising it later rehashes keys and breaks per-key ordering. <b>Brokers</b> add NICs,
-              disks, and page cache; partitions (and leadership) rebalance across them.{' '}
-              <b>Consumer groups</b> scale processing up to the partition count, coordinated
-              through rebalance protocols. The sandbox below is the classic partition-math
-              exercise — now you know <em>why</em> each ceiling exists:
+              Horizontal scaling has three independent dimensions. <em>Partitions</em> spread a
+              topic&apos;s load across brokers and set the maximum number of consumers that can
+              process it in parallel. This is the number that has to be chosen in advance,
+              because raising it later changes which partition each key hashes to, and so breaks
+              ordering per key. <em>Brokers</em> add network interfaces, disks and page cache, and
+              partitions and their leadership are rebalanced across them. <em>Consumer groups</em>{' '}
+              scale processing up to the partition count, coordinated through the rebalance
+              protocol. The sandbox below is the classic partition arithmetic, and by now the
+              reason for each ceiling should be clear.
             </p>
             <Sandbox content={{ inputs: scaleOutInputs, compute: computeScaleOut }} />
             <div className="boundary">
               <h3>The scaling ladder — apply in order</h3>
               <ol className="ladder">
-                <li><b>Choose partition count for peak parallelism + headroom</b> at topic creation — the decision you can&apos;t cheaply undo.</li>
-                <li><b>Scale consumers</b> up to the partition count for linear processing power.</li>
-                <li><b>Add brokers</b> to grow aggregate NIC, disk, and page cache; rebalance partitions onto them.</li>
-                <li><b>Key thoughtfully</b> so ordering holds where needed and load spreads where not.</li>
-                <li><b>Watch consumer lag, not CPU</b> — lag is the true signal you&apos;ve hit a wall.</li>
+                <li><b>Choose the partition count at topic creation,</b> for peak parallelism plus headroom. This is the decision that cannot be cheaply undone.</li>
+                <li><b>Scale consumers</b> up to the partition count; processing power grows linearly until then.</li>
+                <li><b>Add brokers</b> to grow aggregate network, disk and page cache, and rebalance partitions onto them.</li>
+                <li><b>Choose keys</b> so that ordering holds where it is needed and load spreads where it is not.</li>
+                <li><b>Watch consumer lag rather than CPU.</b> Lag is the signal that a limit has been reached.</li>
               </ol>
             </div>
           </Ch>
 
           <Ch id="ops" n={6} title="Operations: the pager view">
             <p>
-              Everything above assumed things go right. They don&apos;t. In production you live by a
-              handful of metrics, and the skill is reading a spike backwards to its cause — because
-              the number that pages you is usually several hops from what actually broke. Start with
-              the cascade, then the runbook.
+              Everything so far has assumed that things go right. In production, one lives by a
+              handful of metrics, and the skill is reading a spike backwards to its cause, because
+              the number that pages you is usually several steps removed from what actually
+              broke. The trace below follows the most common cascade; the runbook follows it.
             </p>
             <TracePlayer spec={cascadeTrace} />
             <h3>The metrics that matter — a runbook</h3>
             <p>
-              Tap any metric for the full card: what healthy looks like, what a spike means, what
-              breaks next, the likely causes ranked common-to-rare, and what you actually do —
-              safest action first.
+              Select any metric to see its full card: what a healthy value looks like, what a
+              change in it means, what breaks next, the likely causes from most to least common,
+              and what to do about it, starting with the safest action.
             </p>
             <MetricRunbook cards={METRICS} />
             <div className="note">
-              <b>The operating mindset.</b> Don&apos;t ask &ldquo;will this scale?&rdquo; — ask
-              &ldquo;when this breaks, how will I know, and what will I do?&rdquo; Alert on the
-              leading indicators (disk %, handler idle, ISR flaps), not just the trailing symptom
-              (p99). And never react to a single metric in isolation: the cascade is the truth.
+              <b>The operating mindset.</b> The useful question is not whether a system will
+              scale but how you will know when it breaks, and what you will do then. Alert on the
+              leading indicators (disk utilisation, handler idle time, changes in the in-sync
+              replica set) rather than only on the trailing symptom, p99 latency. And do not
+              react to a single metric in isolation; the cascade is what is actually happening.
             </div>
           </Ch>
 
           <Ch id="bigcluster" n={7} title="What a large cluster actually looks like">
             <p>
-              At the top end, Kafka runs at a scale that&apos;s hard to picture. LinkedIn — where
-              Kafka was born — publishes its numbers, and they reframe what &ldquo;a Kafka
-              deployment&rdquo; even means:
+              At the top end, Kafka runs at a scale that is hard to picture. LinkedIn, where Kafka
+              was written, publishes its figures, and they change what a Kafka deployment even
+              means:
             </p>
             <div className="bigfacts">
               <div className="bigfact"><div className="bf-v">7T</div><div className="bf-k">messages / day</div><div className="bf-s">across the whole ecosystem</div></div>
@@ -254,17 +286,17 @@ export default function KafkaPage() {
               <div className="bigfact"><div className="bf-v">7M</div><div className="bf-k">partitions</div><div className="bf-s">~1,750 per broker</div></div>
             </div>
             <p>
-              The most important thing that table tells you: <b>nobody runs one enormous cluster.</b>{' '}
-              100+ clusters averaging ~40 brokers each is deliberate — a fault-domain hierarchy built
-              for failure. Zoom through it, from regions down into a single broker (and fail a zone at
-              the rack-awareness step to see why the layout is shaped the way it is):
+              The most important thing in that table is that nobody runs one enormous cluster.
+              More than a hundred clusters of about forty brokers each is a deliberate hierarchy
+              of failure domains. The view below zooms from regions down into a single broker. At
+              the rack-awareness step, fail a zone to see why the layout has the shape it does.
             </p>
             <ClusterZoom />
-            <h3>The techniques that don&apos;t show up in the picture</h3>
+            <h3>The techniques that do not show up in the picture</h3>
             <ul className="clean">
-              <li><b>Tiered storage (KIP-405).</b> Offload cold log segments to object storage (S3/GCS) so brokers keep only the hot tail on local disk — the disk-capacity wall from Chapter 3 stops being the constraint.</li>
-              <li><b>Target ~80% of sustained max.</b> Leave headroom so a broker loss or a recovering replica (which writes fast) doesn&apos;t tip a survivor over its own limit.</li>
-              <li><b>KRaft over ZooKeeper.</b> The metadata quorum (Chapter 2) replaced ZooKeeper precisely to lift the per-cluster partition ceiling that used to force even more fragmentation.</li>
+              <li><b>Tiered storage (KIP-405).</b> Cold log segments are moved to object storage such as S3 or GCS, so that brokers keep only the recent tail on local disk, and the disk-capacity limit from <a href="#hardware">Chapter 3</a> stops being the constraint.</li>
+              <li><b>Target about 80% of sustained maximum.</b> The headroom is what absorbs a broker loss, or a recovering replica writing at full speed, without pushing a surviving broker past its own limit.</li>
+              <li><b>KRaft in place of ZooKeeper.</b> The metadata quorum from <a href="#anatomy">Chapter 2</a> replaced ZooKeeper precisely to lift the per-cluster partition ceiling, which used to force even more fragmentation than the table shows.</li>
             </ul>
             <p className="fl-src-note">
               Figures:{' '}
@@ -283,7 +315,7 @@ export default function KafkaPage() {
                   <tr key={r[0]}>
                     <td>{r[0]}</td>
                     <td><code>{r[1]}</code></td>
-                    <td>{r[2]}</td>
+                    <td>{withChapterLinks(r[2])}</td>
                   </tr>
                 ))}
               </tbody>
@@ -292,7 +324,7 @@ export default function KafkaPage() {
               {FAILS.map((f) => (
                 <div className="fail" key={f[0]}>
                   <div className="fn">{f[0]}</div>
-                  <p className="fd">{f[1]}</p>
+                  <p className="fd">{withChapterLinks(f[1])}</p>
                 </div>
               ))}
             </div>
@@ -305,35 +337,35 @@ export default function KafkaPage() {
                 <a href="https://notes.stephenholiday.com/Kafka.pdf" target="_blank" rel="noreferrer">
                   Kreps, Narkhede &amp; Rao — “Kafka: a Distributed Messaging System for Log Processing” (NetDB ’11)
                 </a>
-                <p>The original LinkedIn paper. Short and readable — §3 is the storage/efficiency design (sequential I/O, page cache, sendfile) you just watched in the traces.</p>
+                <p>The original LinkedIn paper. Short and readable; section 3 describes the storage and efficiency design (sequential I/O, the page cache, sendfile) that the traces above animate.</p>
               </div>
               <div className="src">
                 <div className="s-k">The essay</div>
                 <a href="https://www.oreilly.com/library/view/i-heart-logs/9781491909379/" target="_blank" rel="noreferrer">
                   Jay Kreps — “I Heart Logs” (O’Reilly, 2014)
                 </a>
-                <p>The philosophical companion: why the log is the unifying abstraction for replication, messaging, and stream processing. This is the book form of the 2013 essay, which LinkedIn has since taken down — arguably the best systems essay of its decade, and now only readable as a book.</p>
+                <p>The philosophical companion: why the log is the unifying abstraction behind replication, messaging and stream processing. This is the book form of the 2013 essay, which LinkedIn has since taken down. It is arguably the best systems essay of its decade, and now readable only as a book.</p>
               </div>
               <div className="src">
                 <div className="s-k">The design docs</div>
                 <a href="https://kafka.apache.org/documentation/#design" target="_blank" rel="noreferrer">
                   Apache Kafka documentation — §4 “Design”
                 </a>
-                <p>Unusually good official docs: persistence, efficiency, the ISR model and its comparison to quorum replication (§4.7 is the underrated gem).</p>
+                <p>Unusually good official documentation: persistence, efficiency, the ISR model and its comparison with quorum replication. Section 4.7 is the part most worth reading.</p>
               </div>
               <div className="src">
                 <div className="s-k">The metadata revolution</div>
                 <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-500%3A+Replace+ZooKeeper+with+a+Self-Managed+Metadata+Quorum" target="_blank" rel="noreferrer">
                   KIP-500 — Replace ZooKeeper with a self-managed metadata quorum (KRaft)
                 </a>
-                <p>Why external coordination had to go, and how a Raft-replicated metadata log lifted the partition-count ceiling. Read alongside the Raft paper when we build the etcd/consensus deep-dive.</p>
+                <p>Why external coordination had to go, and how a Raft-replicated metadata log lifted the partition-count ceiling. Worth reading alongside the Raft paper once the consensus deep-dive exists.</p>
               </div>
               <div className="src">
                 <div className="s-k">The clever bit</div>
                 <a href="https://www.confluent.io/blog/apache-kafka-purgatory-hierarchical-timing-wheels/" target="_blank" rel="noreferrer">
                   “Apache Kafka, Purgatory, and Hierarchical Timing Wheels” (Confluent)
                 </a>
-                <p>How hundreds of thousands of parked requests (acks=all produces, long-poll fetches) are managed in O(1) — the data structure behind steps 6 and 2 of the traces.</p>
+                <p>How hundreds of thousands of parked requests (acks=all produces, long-poll fetches) are managed in constant time. This is the data structure behind step 6 of the produce trace and step 2 of the fetch trace.</p>
               </div>
             </div>
           </Ch>

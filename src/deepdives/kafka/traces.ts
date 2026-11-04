@@ -37,14 +37,14 @@ export const produceTrace: TraceSpec = {
     {
       title: 'Partition & batch on the client',
       prose:
-        'The serializer turns your record into bytes; the partitioner picks a partition — <code>hash(key) % partitions</code> for keyed records (this is what makes per-key ordering work), sticky batching for null keys. Records accumulate into <b>per-partition batches</b> governed by <code>batch.size</code> and <code>linger.ms</code>, and compression (lz4/zstd) is applied per <em>batch</em>, not per record — batching is where Kafka clients earn their throughput.',
+        'The serializer turns your record into bytes, and the partitioner chooses a partition: <code>hash(key) % partitions</code> for a keyed record, which is what makes ordering per key possible, or sticky batching for records with no key. Records then accumulate into per-partition batches, governed by <code>batch.size</code> and <code>linger.ms</code>, and compression (lz4 or zstd) is applied to each batch rather than to each record. Batching is where a Kafka client earns most of its throughput.',
       focus: ['app', 'accum'],
       particles: [{ from: 'app', to: 'accum', color: C.client, count: 3 }],
     },
     {
       title: 'Sender drains to the leader',
       prose:
-        'A single background <b>sender thread</b> drains ready batches and multiplexes them over one TCP connection per broker, routed to each partition’s <b>leader</b>. With the idempotent producer (default), every batch carries a producer id + sequence number so broker-side dedup makes retries safe.',
+        'A single background <em>sender thread</em> drains the batches that are ready and multiplexes them over one TCP connection per broker, routing each batch to the leader of its partition. With the idempotent producer, which is the default, every batch carries a producer ID and a sequence number, so the broker can discard duplicates and retries become safe.',
       focus: ['accum', 'sender', 'net'],
       particles: [
         { from: 'accum', to: 'sender', color: C.client },
@@ -55,14 +55,14 @@ export const produceTrace: TraceSpec = {
     {
       title: 'Network thread → request queue',
       prose:
-        'Broker <b>network threads</b> (default 3) do no real work — they read bytes off sockets and park complete requests in a shared <b>request queue</b>. Keeping them thin is deliberate: socket I/O never blocks behind disk work.',
+        'The broker’s <em>network threads</em> (three by default) do no real work. They read bytes off sockets and place complete requests on a shared request queue. Keeping them thin is deliberate: socket I/O should never block behind disk work.',
       focus: ['net', 'reqq'],
       particles: [{ from: 'net', to: 'reqq', color: C.broker }],
     },
     {
       title: 'Append to the log — the heart of Kafka',
       prose:
-        'An <b>I/O thread</b> (default 8) validates the batch (leader epoch, producer sequence) and appends it to the partition’s <b>active segment</b> — a plain <em>sequential file write</em> that lands in the <b>OS page cache</b>. There is <b>no fsync</b> on this path by default: durability comes from replication, and the OS flushes lazily. Sequential I/O + page cache instead of application buffers is <em>the</em> design decision the whole system falls out of.',
+        'An <em>I/O thread</em> (eight by default) validates the batch, checking the leader epoch and the producer sequence, and appends it to the partition’s active segment. This is an ordinary sequential write to a file, and it lands in the OS page cache. By default there is no fsync on this path: durability comes from replication, and the operating system flushes dirty pages when it chooses to. Sequential I/O into the page cache, instead of application-managed buffers, is the design decision from which the rest of the system follows.',
       focus: ['reqq', 'io', 'cache'],
       particles: [
         { from: 'reqq', to: 'io', color: C.broker },
@@ -72,21 +72,21 @@ export const produceTrace: TraceSpec = {
     {
       title: 'Sparse indexes, memory-mapped',
       prose:
-        'Every ~4 KB of log (<code>log.index.interval.bytes</code>) gets one entry in the <b>offset index</b> and <b>time index</b> — memory-mapped files that let a fetch at offset N binary-search to a file position without scanning. Sparse is enough because reads then scan forward sequentially.',
+        'Every 4 KB or so of log (<code>log.index.interval.bytes</code>) gets one entry in the offset index and one in the time index. These are memory-mapped files, and they let a fetch at offset N binary-search to a file position without scanning the log. A sparse index is enough because a read then proceeds sequentially from that position.',
       focus: ['io', 'index'],
       particles: [{ from: 'io', to: 'index', color: C.broker }],
     },
     {
       title: 'Parked in purgatory',
       prose:
-        'With <code>acks=all</code> the response can’t be sent until the in-sync replicas have the batch. The request is parked in <b>purgatory</b> — a hierarchical timing-wheel structure that holds hundreds of thousands of pending requests with O(1) insert/expire. No thread blocks waiting.',
+        'With <code>acks=all</code>, the response cannot be sent until the in-sync replicas have the batch. Rather than block a thread, the request is parked in <em>purgatory</em>, a hierarchical timing-wheel structure that holds hundreds of thousands of pending requests with constant-time insertion and expiry.',
       focus: ['purg'],
       particles: [{ from: 'io', to: 'purg', color: C.purg }],
     },
     {
       title: 'Followers fetch — replication is consumption',
       prose:
-        'Followers are not sent data; they <b>fetch it</b>, running the same fetch protocol as any consumer, and append to their own logs (their own page caches). One replication mechanism, one code path — and it reads from the leader’s page cache, so tail replication rarely touches disk.',
+        'Followers are not sent the data; they fetch it, using the same fetch protocol as any consumer, and append it to their own logs and hence their own page caches. There is one replication mechanism and one code path. Because the fetch reads from the leader’s page cache, replication of the tail rarely touches disk.',
       focus: ['f1', 'f2', 'cache'],
       particles: [
         { from: 'cache', to: 'f1', color: C.repl },
@@ -96,7 +96,7 @@ export const produceTrace: TraceSpec = {
     {
       title: 'High watermark advances',
       prose:
-        'The leader tracks every replica’s log-end-offset. The <b>high watermark</b> = the minimum across the ISR: everything below it is <em>committed</em> and survives any single-broker loss. When the HW passes our batch, purgatory completes the produce request. Consumers may only ever read up to the HW.',
+        'The leader tracks every replica’s log-end offset. The <em>high watermark</em> is the minimum of those across the in-sync replicas: everything below it is committed, and will survive the loss of any single broker. When the high watermark passes our batch, purgatory completes the produce request. Consumers are only ever allowed to read up to the high watermark.',
       focus: ['hw', 'purg', 'f1', 'f2'],
       particles: [
         // f1's report routes down the channel left of the followers, not through f2
@@ -107,7 +107,7 @@ export const produceTrace: TraceSpec = {
     {
       title: 'Ack the producer',
       prose:
-        'The response exits through the same network thread and the producer’s callback fires. Total cost of a durable, replicated write: <b>two network hops, one sequential page-cache append, and RF−1 fetches</b> — and at no point did anyone wait on a random disk seek. That is why one broker sustains hundreds of MB/s.',
+        'The response leaves through the same network thread, and the producer’s callback fires. The total cost of a durable, replicated write was two network hops, one sequential append into the page cache, and RF − 1 fetches, and at no point did anything wait for a random disk seek. That is why one broker sustains hundreds of megabytes per second.',
       focus: ['net', 'app'],
       particles: [
         // response routes down under the grid and up the inter-zone channel,
@@ -141,35 +141,35 @@ export const consumeTrace: TraceSpec = {
     {
       title: 'Fetch request',
       prose:
-        'The consumer asks for data from <b>offset N</b> — position is consumer-side state, the broker tracks nothing per consumer on the read path. <code>fetch.min.bytes</code> and <code>fetch.max.wait.ms</code> tell the broker “don’t answer until you have this much, or this long has passed.”',
+        'The consumer asks for data from offset N. The position is the consumer’s own state; the broker tracks nothing per consumer on the read path. <code>fetch.min.bytes</code> and <code>fetch.max.wait.ms</code> tell the broker not to answer until it has at least that much data, or that much time has passed.',
       focus: ['cons', 'net'],
       particles: [{ from: 'cons', to: 'net', color: C.client }],
     },
     {
       title: 'Long-poll in fetch purgatory',
       prose:
-        'If not enough data exists yet, the fetch parks in <b>purgatory</b> instead of busy-polling. This one mechanism gives Kafka low latency <em>and</em> batched efficiency: data arriving completes waiting fetches immediately, quiet partitions cost nothing.',
+        'If not enough data exists yet, the fetch is parked in purgatory rather than polled repeatedly. This single mechanism gives Kafka both low latency and batched efficiency: data arriving completes the waiting fetches immediately, and a quiet partition costs nothing while it waits.',
       focus: ['fpurg'],
       particles: [{ from: 'net', to: 'fpurg', color: C.purg }],
     },
     {
       title: 'Bounded by the high watermark',
       prose:
-        'The read is capped at the <b>high watermark</b>: only records replicated to the ISR are visible. A consumer can never observe data that a leader failover could roll back.',
+        'The read is capped at the high watermark, so only records that have been replicated to the in-sync replicas are visible. A consumer can therefore never observe data that a leader failover could later roll back.',
       focus: ['hw'],
       particles: [{ from: 'fpurg', to: 'hw', color: C.repl }],
     },
     {
       title: 'Read from the page cache',
       prose:
-        'Tail consumers — the overwhelmingly common case — read data written seconds ago, which is still sitting in the <b>page cache</b>: no disk I/O at all. The dangerous case is a <em>lagging</em> consumer paging in cold segments from disk, evicting hot pages and hurting everyone — cache pollution as a noisy-neighbor problem.',
+        'A consumer reading the tail, which is by far the most common case, is reading data written seconds ago, and that data is still in the page cache, so no disk I/O occurs at all. The troublesome case is a lagging consumer that reads cold segments from disk, evicting the hot pages and slowing everyone else. This is <em>cache pollution</em>, and it is a noisy-neighbour problem.',
       focus: ['cache'],
       particles: [{ from: 'hw', to: 'cache', color: C.cache }],
     },
     {
       title: 'Zero-copy to the NIC',
       prose:
-        'The broker calls <b>sendfile(2)</b>: the kernel moves pages from the cache straight to the network card. The data never enters broker user space — no copies, no heap allocation, no GC pressure, regardless of message size. (TLS is the caveat: encryption forces one pass through user space — still cheap, but it’s why plaintext benchmarks look superhuman.)',
+        'The broker calls <code>sendfile(2)</code>, and the kernel moves pages from the cache directly to the network card. The data never enters the broker’s user space: no copies, no heap allocation, and no garbage-collection pressure, regardless of message size. TLS is the caveat, since encryption forces one pass through user space. It is still cheap, but it is why plaintext benchmarks look better than production ever will.',
       focus: ['sfile', 'cons'],
       particles: [
         { from: 'cache', to: 'sfile', color: C.cache },
@@ -180,7 +180,7 @@ export const consumeTrace: TraceSpec = {
     {
       title: 'Commit offsets — to Kafka itself',
       prose:
-        'The consumer records its position by producing to <b>__consumer_offsets</b> — a compacted internal topic keyed by (group, topic, partition). Kafka stores its own coordination state in its own log: the log really is the database.',
+        'The consumer records its position by producing a record to <code>__consumer_offsets</code>, a compacted internal topic keyed by group, topic and partition. Kafka stores its own coordination state in its own log; the log really is the database.',
       focus: ['commit', 'offlog'],
       // route under the grid to __consumer_offsets, not across the page cache
       particles: [{ from: 'commit', to: 'offlog', color: C.repl, via: [{ x: 12.5, y: 46 }, { x: 87, y: 46 }] }],

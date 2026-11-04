@@ -30,7 +30,7 @@ export const METRICS: MetricCard[] = [
       'Profile the handler / downstream latency — often the real culprit',
       'In a genuine emergency, temporarily raise retention to stop data from aging out while you fix the root cause',
     ],
-    tie: 'This is the consumer-parallelism ceiling from Chapter 5, now observed instead of predicted.',
+    tie: 'This is the consumer-parallelism ceiling from <a href="#scale-out">Chapter 5</a>, now observed instead of predicted.',
   },
   {
     metric: 'Under-replicated partitions',
@@ -52,7 +52,7 @@ export const METRICS: MetricCard[] = [
       'Do NOT roll-restart the cluster blindly — that removes more replicas and makes it worse',
       'Once identified, relieve load (move leadership off it) or replace the broker',
     ],
-    tie: 'Ties to the ISR replication model from the produce trace in Chapter 2.',
+    tie: 'Ties to the ISR replication model from the produce trace in <a href="#anatomy">Chapter 2</a>.',
   },
   {
     metric: 'Offline partitions',
@@ -91,7 +91,7 @@ export const METRICS: MetricCard[] = [
       'Restore controller nodes; the quorum re-elects one leader automatically',
       'Never run an even number of controllers — you want a clear majority (3 or 5)',
     ],
-    tie: 'This is the KRaft metadata quorum from Chapter 2 — itself a replicated log.',
+    tie: 'This is the KRaft metadata quorum from <a href="#anatomy">Chapter 2</a> — itself a replicated log.',
   },
   {
     metric: 'Request handler idle ratio',
@@ -108,11 +108,11 @@ export const METRICS: MetricCard[] = [
       'Slow disk making each append take longer, tying up threads',
     ],
     respond: [
-      'Check bytes-in/out vs the NIC first — you may simply be at the envelope from Chapter 3',
+      'Check bytes-in/out vs the NIC first — you may simply be at the envelope from <a href="#hardware">Chapter 3</a>',
       'Rebalance leadership to spread load off the hot broker',
       'Add brokers (real fix); raise num.io.threads as a stopgap',
     ],
-    tie: 'This is the hardware envelope from Chapter 3, observed live.',
+    tie: 'This is the hardware envelope from <a href="#hardware">Chapter 3</a>, observed live.',
   },
   {
     metric: 'Request latency p99',
@@ -172,7 +172,7 @@ export const METRICS: MetricCard[] = [
       'Add brokers/disks, or enable tiered storage to offload cold segments to object storage',
       'Alert at 75%, not 95% — you need lead time before a broker dies',
     ],
-    tie: 'This is the disk-capacity meter from the Chapter 3 envelope, hit for real.',
+    tie: 'This is the disk-capacity meter from the <a href="#hardware">Chapter 3</a> envelope, hit for real.',
   },
 ]
 
@@ -202,34 +202,34 @@ export const cascadeTrace: TraceSpec = {
     {
       title: 'A disk gets slow',
       prose:
-        'Nothing crashed. One broker’s NVMe is aging, or a rebuild is hammering it, or a noisy neighbor stole the IOPS. <b>Disk write latency creeps up</b> — the single root cause everything below descends from. Notice: no alert has fired yet.',
+        'Nothing has crashed. One broker’s NVMe drive is ageing, or a rebuild is loading it, or a neighbouring tenant has taken its IOPS. Disk write latency creeps upward. This is the single cause from which everything below follows, and no alert has fired yet.',
       focus: ['disk'],
     },
     {
       title: 'Appends take longer',
       prose:
-        'Every produce append lands in the page cache, but the periodic flush of dirty pages to that slow disk now takes longer. <b>Log-flush latency rises.</b> Still no page — this is an internal metric most teams don’t even alert on.',
+        'Every produce append still lands in the page cache, but the periodic flush of dirty pages to the slow disk now takes longer, so log-flush latency rises. There is still no page: this is an internal metric that most teams do not alert on.',
       focus: ['disk', 'flush'],
       particles: [{ from: 'disk', to: 'flush', color: AMBER }],
     },
     {
       title: 'I/O threads back up',
       prose:
-        'Threads spend longer per request, so the pool has less idle time. <b>RequestHandlerAvgIdlePercent falls toward 0</b> — the broker is saturating, but only on this one node.',
+        'Each request now occupies a thread for longer, so the pool has less idle time, and <code>RequestHandlerAvgIdlePercent</code> falls towards zero. The broker is saturating, but only this one node.',
       focus: ['flush', 'idle'],
       particles: [{ from: 'flush', to: 'idle', color: AMBER }],
     },
     {
       title: 'Latency spikes (first real symptom)',
       prose:
-        'Requests queue behind busy threads. <b>Produce p99 jumps</b> — and this is usually the FIRST metric anyone actually watches. But notice it’s <em>three hops</em> from the root cause: paging on p99 alone tells you something hurts, not what.',
+        'Requests queue behind busy threads, and produce p99 latency jumps. This is usually the first metric that anyone is watching, and it is three steps removed from the cause. Alerting on p99 alone says that something hurts, not what.',
       focus: ['idle', 'p99'],
       particles: [{ from: 'idle', to: 'p99', color: AMBER }],
     },
     {
       title: 'Durability degrades',
       prose:
-        'With <code>acks=all</code>, followers fetch from this slow leader and fall behind, so replicas drop out of the ISR. <b>Under-replicated partitions rises.</b> Now two independent alerts (p99 and URP) are firing from one slow disk.',
+        'With <code>acks=all</code>, followers fetching from this slow leader fall behind, and replicas drop out of the in-sync set. The under-replicated partitions count rises. Two independent alerts, p99 and URP, are now firing because of one slow disk.',
       focus: ['p99', 'urp'],
       // route up the channel between the two zones, not across Producer retries
       particles: [{ from: 'p99', to: 'urp', color: RED, via: [{ x: 65, y: 35.5 }, { x: 65, y: 11.5 }] }],
@@ -237,7 +237,7 @@ export const cascadeTrace: TraceSpec = {
     {
       title: 'The feedback loop',
       prose:
-        'Slow acks make producers time out and <b>retry</b> — re-sending load onto the broker that’s already drowning. This positive feedback is what turns a slow disk into a <em>cliff</em>: the system accelerates its own collapse.',
+        'Slow acknowledgements make producers time out and retry, which sends the same load again to a broker that is already overwhelmed. This positive feedback is what turns a slow disk into a cliff: the system accelerates its own collapse.',
       focus: ['urp', 'retries', 'idle'],
       particles: [
         { from: 'urp', to: 'retries', color: RED },
@@ -247,14 +247,14 @@ export const cascadeTrace: TraceSpec = {
     {
       title: 'Consumers starve',
       prose:
-        'Fetches from this broker’s partitions slow too, so <b>consumer lag climbs</b> and downstream data goes stale. One aging disk has now produced four separate alerts across latency, durability, and freshness.',
+        'Fetches from this broker’s partitions slow down as well, so consumer lag climbs and downstream data goes stale. One ageing disk has now produced four separate alerts, covering latency, durability and freshness.',
       focus: ['p99', 'lag'],
       particles: [{ from: 'p99', to: 'lag', color: RED }],
     },
     {
       title: 'The lesson: correlate, don’t react',
       prose:
-        'The metric you paged on (URP or p99) is several hops from the cause (disk). Reacting to it directly — rolling the cluster, adding brokers — can make things worse. <b>Reading the cascade backwards to the root</b> is the skill. That’s what a runbook is for.',
+        'The metric that paged you, whether URP or p99, is several steps from the cause. Reacting to it directly, by rolling the cluster or adding brokers, can make things worse. The skill is reading the cascade backwards to its root, and that is what a runbook is for.',
       focus: ['disk', 'flush', 'idle', 'p99', 'urp', 'retries', 'lag'],
       // the two "trace it back" arrows sweep around via the top & bottom
       // channels instead of cutting across the middle nodes

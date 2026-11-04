@@ -74,33 +74,33 @@ const STEPS: Step[] = [
   {
     title: 'Regions',
     prose:
-      'Kafka does not span regions automatically. Each region is an <b>independent deployment</b>; you mirror topics between them (MirrorMaker 2 / Cluster Linking) for geo-distribution and disaster recovery.',
+      'Kafka does not span regions by itself. Each region is an independent deployment, and topics are mirrored between regions, with MirrorMaker 2 or Cluster Linking, for geographic distribution and disaster recovery.',
     frame: { id: 'world', name: '', x: 0, y: 0, w: 1200, h: 760 },
   },
   {
     title: 'Inside a region: availability zones',
     prose:
-      'A region is several <b>availability zones</b> — separate power, network, and cooling. A whole zone can fail at once, so the zone is the failure domain that placement has to respect.',
+      'A region consists of several <em>availability zones</em>, each with separate power, network and cooling. A whole zone can fail at once, so the zone is the failure domain that replica placement has to respect.',
     frame: { id: 'r', name: '', x: 50, y: 220, w: 340, h: 320 },
   },
   {
     title: 'Rack-aware placement',
     prose:
-      'A cluster’s brokers span the zones. Kafka places a partition’s replicas in <b>different zones</b> (rack awareness) so no single zone loss can take it offline. <b>Fail a zone below</b> — rack-aware keeps 2 of 3 replicas alive and the partition stays available. Flip to naive placement (two replicas in one zone) and the same failure takes it offline.',
+      'A cluster’s brokers span the zones. Kafka places a partition’s replicas in different zones (<em>rack awareness</em>) so that the loss of one zone cannot take the partition offline. Fail a zone below: with rack-aware placement, two of the three replicas survive and the partition stays available. Switch to naive placement, with two replicas in one zone, and the same failure takes it offline.',
     frame: { id: 'az', name: '', x: 68, y: 244, w: 300, h: 292 },
     interactive: 'az',
   },
   {
     title: 'Blast radius',
     prose:
-      'Even with good placement, cluster <b>size</b> matters. When a broker dies its partitions re-replicate onto the survivors — the bigger the cluster, the more correlated damage and the longer the rebuild. That’s why the giants run <b>many bounded clusters</b> (federation), not one huge one.',
+      'Even with good placement, the size of a cluster matters. When a broker dies, its partitions are re-replicated onto the survivors, and the larger the cluster, the more correlated the damage and the longer the rebuild. This is why the largest operators run many bounded clusters, a pattern sometimes called federation, rather than one enormous one.',
     frame: { id: 'grid', name: '', x: 86, y: 256, w: 236, h: 272 },
     interactive: 'broker',
   },
   {
     title: 'Into the broker',
     prose:
-      'Zoom all the way in and a broker is just holding <b>partition replicas</b> — some leaders, some followers, each an append-only log. Inside this box is the machinery from <b>Chapter 2</b>: the network threads, the page cache, the sequential append. The zoom bottoms out exactly where the anatomy began.',
+      'Zoomed all the way in, a broker is simply holding partition replicas, some as leader and some as follower, each an append-only log. Inside this box is the machinery of <a href="#anatomy">Chapter 2</a>: the network threads, the page cache, the sequential append. The zoom ends exactly where the anatomy began.',
     frame: { id: 'broker', name: '', x: 96, y: 262, w: 112, h: 62 },
   },
 ]
