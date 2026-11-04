@@ -32,49 +32,49 @@ export const cascadeTrace: TraceSpec = {
     {
       title: '00:00 — a downstream API gets slower. Nothing alerts.',
       prose:
-        'The sink writes to a service that has just started taking 40 ms instead of 8 ms. No threshold is crossed, no page fires, and the Flink job is still correct — it is simply unable to drain as fast as it fills. <b>This is the only thing that is actually broken in the entire incident.</b> Everything after this point is the system behaving exactly as documented.',
+        'The sink writes to a service that has just started taking 40 ms per call instead of 8 ms. No threshold is crossed, no page fires, and the Flink job is still correct; it is simply unable to drain as fast as it fills. This is the only thing in the entire incident that is actually broken. Everything after this point is the system behaving exactly as documented.',
       focus: ['sink'],
       particles: [],
     },
     {
       title: '00:02 — backpressure walks upstream, one hop at a time',
       prose:
-        'The sink stops requesting buffers; its upstream operator fills its output queue and stops consuming; <em>its</em> upstream does the same. Within seconds the whole graph is throttled to the speed of the slowest stage. <b>This is Flink working properly</b> — the alternative is unbounded buffering and an OOM. <code>backPressuredTimeMsPerSecond</code> is now high across most tasks, which tells you everything is slow and nothing about which thing is the cause.',
+        'The sink stops requesting buffers; its upstream operator fills its output queue and stops consuming; that operator’s upstream does the same. Within seconds the whole graph is throttled to the speed of the slowest stage. This is Flink working as intended, since the alternative is unbounded buffering and an OutOfMemoryError. <code>backPressuredTimeMsPerSecond</code> is now high across most tasks, which says that everything is slow and nothing about which thing is the cause.',
       focus: ['sink', 'ops'],
       particles: [{ from: 'sink', to: 'ops', color: VIZ.red }],
     },
     {
       title: '00:03 — the sources stop reading, and consumer lag becomes the headline',
       prose:
-        'The source tasks are throttled too, so Kafka lag starts climbing and <em>that</em> is the graph somebody screenshots into the incident channel. It is a real symptom and a terrible place to start debugging: lag is the last link in the chain, furthest from the cause. <b>The task to look for is the one that is busy while its downstream is not backpressured</b> — that is the bottom of the backpressure, and the fault is just below it.',
+        'The source tasks are throttled too, so Kafka lag starts climbing, and that is the graph somebody pastes into the incident channel. It is a real symptom and a poor place to start, because lag is the last link in the chain, furthest from the cause. The task to look for is the one that is busy while its downstream is not backpressured. That is the bottom of the backpressure, and the fault is just below it.',
       focus: ['ops', 'src'],
       particles: [{ from: 'ops', to: 'src', color: VIZ.red }],
     },
     {
       title: '00:06 — checkpoints start taking minutes instead of seconds',
       prose:
-        'Barriers travel inside the data, so now they are queued behind everything else. Alignment time grows, <code>checkpointStartDelayNanos</code> grows, and <code>lastCheckpointDuration</code> climbs even though the amount of state has not changed at all. <b>This is the moment the incident becomes a Flink incident rather than a slow-API incident</b>, and it is also the moment most people start suspecting the state backend, which is innocent.',
+        'Barriers travel inside the data, so they are now queued behind everything else. Alignment time grows, <code>checkpointStartDelayNanos</code> grows, and <code>lastCheckpointDuration</code> climbs even though the amount of state has not changed at all. This is the moment the incident becomes a Flink incident rather than a slow-API incident, and it is also the moment most people begin to suspect the state backend, which is innocent.',
       focus: ['ops', 'ck'],
       particles: [{ from: 'ops', to: 'ck', color: VIZ.red, via: [{ x: 48, y: 27.5 }, { x: 48, y: 15.5 }] }],
     },
     {
       title: '00:16 — the checkpoint hits the 10-minute timeout, and the job dies',
       prose:
-        'The checkpoint exceeds the default timeout and is discarded. <code>execution.checkpointing.tolerable-failed-checkpoints</code> defaults to <b>0</b>, so one discarded checkpoint fails the job outright. <em>A job that was merely slow is now a job that is down</em>, and the thing that killed it was a timeout defending against a problem it could not fix.',
+        'The checkpoint exceeds the default timeout and is discarded. <code>execution.checkpointing.tolerable-failed-checkpoints</code> defaults to 0, so one discarded checkpoint fails the job outright. A job that was merely slow is now a job that is down, and what killed it was a timeout defending against a problem it could not fix.',
       focus: ['ck', 'fail'],
       particles: [{ from: 'ck', to: 'fail', color: VIZ.red }],
     },
     {
       title: '00:17 — the restart makes it worse, which is the cruel part',
       prose:
-        'The job restarts, every subtask downloads its state, and processing resumes <b>from the last successful checkpoint</b> — which was taken before all of this started. So it must now reprocess the backlog it accumulated <em>and</em> the new arrivals, through a sink that is still slow. The queue is longer than it was at 00:00. If nothing changes, the next checkpoint also times out.',
+        'The job restarts, every subtask downloads its state, and processing resumes from the last successful checkpoint, which was taken before any of this began. It must now reprocess the backlog it accumulated as well as the new arrivals, through a sink that is still slow. The queue is longer than it was at 00:00. If nothing changes, the next checkpoint also times out.',
       focus: ['fail', 'rs'],
       particles: [{ from: 'fail', to: 'rs', color: VIZ.red }],
     },
     {
       title: '00:24 — and around again. Read it backwards.',
       prose:
-        'Restart, replay, fall further behind, time out, fail. The dashboard is five red panels — lag, backpressure, checkpoint duration, failed checkpoints, restart count — and <b>every one of them is downstream of a sink that went from 8 ms to 40 ms.</b> <em>The move is never to tune the checkpoint.</em> It is to raise <code>tolerable-failed-checkpoints</code> so a slow minute cannot kill the job, turn on unaligned checkpoints so barriers stop queueing, and then go fix the API.',
+        'Restart, replay, fall further behind, time out, fail. The dashboard shows five red panels, lag, backpressure, checkpoint duration, failed checkpoints and restart count, and every one of them is downstream of a sink that went from 8 ms to 40 ms. The move is never to tune the checkpoint. It is to raise <code>tolerable-failed-checkpoints</code> so that a slow minute cannot kill the job, to turn on unaligned checkpoints so that barriers stop queueing, and then to fix the API.',
       focus: ['rs', 'src', 'sink'],
       particles: [{ from: 'rs', to: 'src', color: VIZ.red }],
     },
