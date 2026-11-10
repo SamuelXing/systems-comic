@@ -45,28 +45,28 @@ export const recordTrace: TraceSpec = {
     {
       title: 'The source is a running task, not a poll loop you wrote',
       prose:
-        'The job is a <b>long-lived physical pipeline</b>, deployed once and left running. The source task owns Kafka partition 3 and holds its offset as <em>Flink state</em>, not as a Kafka consumer-group commit — which is the first thing that surprises people. The offset and the downstream aggregates have to move together or exactly-once is a slogan, so Flink keeps both in the same snapshot and treats the broker as a replayable log rather than a cursor.',
+        'The job is a long-lived physical pipeline, deployed once and left running. The source task owns Kafka partition 3 and holds its offset as <em>Flink state</em>, not as a Kafka consumer-group commit, which is the first thing that surprises people. The offset and the downstream aggregates have to move together, or exactly-once is only a slogan, so Flink keeps both in the same snapshot and treats the broker as a replayable log rather than as a cursor.',
       focus: ['kafka', 'src'],
       particles: [{ from: 'kafka', to: 'src', color: C.data }],
     },
     {
       title: 'Chained operators are a function call, and that is the whole optimisation',
       prose:
-        'The <code>map</code> and <code>filter</code> are <b>chained</b> into the source task: same thread, same JVM, no serialization, no buffer, no network. The record is passed as an object reference. <em>This is why operator chaining is the first thing you check when a job is slower than it should be</em> — a chain broken by a rebalance or a mismatched parallelism turns a function call into a serialize-copy-deserialize round trip, and nothing in the API shouts when that happens.',
+        'The <code>map</code> and <code>filter</code> are <em>chained</em> into the source task: same thread, same JVM, no serialisation, no buffer, no network. The record is passed as an object reference. This is why operator chaining is the first thing to check when a job is slower than it should be. A chain broken by a rebalance or by a mismatched parallelism turns a function call into a serialise, copy and deserialise round trip, and nothing in the API warns you when that happens.',
       focus: ['src', 'chain'],
       particles: [{ from: 'src', to: 'chain', color: C.data }],
     },
     {
       title: 'keyBy is a network shuffle, and it is where the record stops being free',
       prose:
-        'A <code>keyBy</code> is not a grouping annotation — it is an <b>all-to-all exchange</b>. The record is serialized, hashed to a key group, written into a network buffer bound for whichever subtask owns that group, and shipped. Every key goes to exactly one subtask, forever, which is what makes the state partitionable and also what makes a hot key unfixable by adding machines: <em>one key is one subtask, and no amount of parallelism splits it.</em>',
+        'A <code>keyBy</code> is not a grouping annotation; it is an all-to-all exchange. The record is serialised, hashed to a key group, written into a network buffer bound for whichever subtask owns that group, and sent. Every key goes to exactly one subtask, for the life of the job. That is what makes the state partitionable, and it is also what makes a hot key impossible to fix by adding machines: one key is one subtask, and no amount of parallelism splits it.',
       focus: ['chain', 'win'],
       particles: [{ from: 'chain', to: 'win', color: C.data, via: [{ x: 58.5, y: 31 }, { x: 58.5, y: 17 }] }],
     },
     {
       title: 'The window reads and writes state, and the backend decides what that costs',
       prose:
-        'The operator looks up this key&rsquo;s accumulator, folds the record in, and writes it back. On the default <b>HashMapStateBackend</b> that is a Java object on the heap — a pointer dereference. On <b>RocksDB</b> it is a serialize, a disk-backed lookup, a deserialize and a write; the documentation puts this at <em>&ldquo;an order of magnitude slower than the memory state backends.&rdquo;</em> You buy that cost for one reason: heap state is bounded by RAM, and RocksDB state is bounded by disk.',
+        'The operator looks up this key’s accumulator, folds the record in, and writes it back. On the default <code>HashMapStateBackend</code> that is a Java object on the heap, so the cost is a pointer dereference. On RocksDB it is a serialisation, a disk-backed lookup, a deserialisation and a write; the documentation puts this at “an order of magnitude slower than the memory state backends.” You pay that cost for one reason: heap state is bounded by RAM, and RocksDB state is bounded by disk.',
       focus: ['win', 'rocks'],
       particles: [
         { from: 'win', to: 'rocks', color: C.data },
@@ -76,7 +76,7 @@ export const recordTrace: TraceSpec = {
     {
       title: 'The sink does not commit — not yet',
       prose:
-        'A two-phase-commit sink <b>writes the data but withholds the commit</b>, holding a pending transaction. It commits only when a checkpoint completes, because that is the only moment the whole pipeline agrees on what has been processed. <em>So end-to-end exactly-once has a latency floor, and that floor is your checkpoint interval.</em> A job checkpointing every minute publishes visible results every minute, whatever its per-record latency says.',
+        'A two-phase-commit sink writes the data but withholds the commit, holding a pending transaction. It commits only when a checkpoint completes, because that is the only moment at which the whole pipeline agrees on what has been processed. End-to-end exactly-once therefore has a latency floor, and that floor is the checkpoint interval. A job that checkpoints every minute publishes visible results every minute, whatever its per-record latency says.',
       focus: ['win', 'sink'],
       /* Round the right-hand corridor: win and sink are stacked with RocksDB
          between them, so the straight line goes through a node it has nothing
@@ -86,7 +86,7 @@ export const recordTrace: TraceSpec = {
     {
       title: 'What the whole path has in common',
       prose:
-        'Three of those five steps were free and two were not, and the expensive two are the ones that cross a boundary: <b>the shuffle crosses machines, the state access crosses the serialization barrier.</b> Every tuning decision on this page is about one of those two. Chaining removes the first where it can; the state backend choice prices the second; and the next trace is about what happens to both of them when the pipeline cannot keep up.',
+        'Three of those five steps were free and two were not, and the expensive two are the ones that cross a boundary: the shuffle crosses machines, and the state access crosses the serialisation barrier. Every tuning decision on this page concerns one of those two. Chaining removes the first where it can; the choice of state backend prices the second; and the next trace shows what happens to both when the pipeline cannot keep up.',
       focus: ['src', 'chain', 'win', 'rocks', 'sink'],
       particles: [],
     },
@@ -112,42 +112,42 @@ export const alignmentTrace: TraceSpec = {
     {
       title: 'A barrier is a record — that is the trick and the trap',
       prose:
-        'To checkpoint without stopping, Flink injects <b>barriers into the data stream itself</b> and lets them flow with the records. Nothing is paused and no clock is consulted, which is the elegance. The consequence is the trap: <em>a barrier moves at exactly the speed of the data in front of it.</em> Barriers are not control messages on a side channel — they queue like everything else.',
+        'To checkpoint without stopping, Flink injects <em>barriers</em> into the data stream itself and lets them flow along with the records. Nothing is paused and no clock is consulted, which is the elegant part. The consequence is the trap: a barrier moves at exactly the speed of the data in front of it. Barriers are not control messages on a side channel; they queue like everything else.',
       focus: ['fast', 'slow'],
       particles: [],
     },
     {
       title: 'The fast input delivers its barrier, and is immediately punished for it',
       prose:
-        'Input A&rsquo;s barrier arrives first. The operator now knows checkpoint <i>n</i> has begun on that channel, and to keep the snapshot consistent it must not fold any post-barrier record from A into the state it is about to capture. So it <b>blocks channel A</b> and buffers everything arriving on it. The faster an input is, the more of it piles up while it waits.',
+        'Input A’s barrier arrives first. The operator now knows that checkpoint <i>n</i> has begun on that channel, and to keep the snapshot consistent it must not fold any post-barrier record from A into the state it is about to capture. So it blocks channel A and buffers everything that arrives on it. The faster an input is, the more of it piles up while it waits.',
       focus: ['fast', 'op'],
       particles: [{ from: 'fast', to: 'op', color: C.data }],
     },
     {
       title: 'The slow input is where the time actually goes',
       prose:
-        'Input B is backpressured — a slow sink downstream, a hot key, a GC pause, it does not matter which. Its barrier is sitting behind every record already queued ahead of it. The docs are blunt about what dominates here: <em>&ldquo;the dominant factor in the end-to-end time of a checkpoint can be the time to propagate checkpoint barriers to all operators/subtasks.&rdquo;</em> <b>Checkpoint duration has stopped being a function of how much state you have.</b>',
+        'Input B is backpressured, whether by a slow sink downstream, a hot key or a garbage-collection pause; the cause does not matter here. Its barrier is sitting behind every record already queued ahead of it. The documentation is blunt about what dominates: “the dominant factor in the end-to-end time of a checkpoint can be the time to propagate checkpoint barriers to all operators/subtasks.” Checkpoint duration has stopped being a function of how much state there is.',
       focus: ['slow', 'op'],
       particles: [{ from: 'slow', to: 'op', color: C.bad }],
     },
     {
       title: 'Alignment time is the operator doing nothing, on purpose',
       prose:
-        'Between A&rsquo;s barrier and B&rsquo;s, this operator processes nothing from A and holds whatever arrives. That gap is the <b>alignment time</b> metric, and it is pure stall. Worse, it is contagious: an operator that is not consuming is an operator applying backpressure to <em>its</em> upstream, so a single slow channel deep in the graph reaches back toward the sources one hop at a time.',
+        'Between A’s barrier and B’s, this operator processes nothing from A and holds whatever arrives. That gap is the <em>alignment time</em> metric, and it is pure stall. It is also contagious: an operator that is not consuming is an operator applying backpressure to its own upstream, so a single slow channel deep in the graph reaches back towards the sources one hop at a time.',
       focus: ['op', 'snap'],
       particles: [],
     },
     {
       title: 'Now check the defaults, because they are not on your side',
       prose:
-        'A checkpoint that takes too long is discarded at the <b>10-minute default timeout</b>. And <code>tolerable-failed-checkpoints</code> defaults to <b>0</b> — so the <em>first</em> checkpoint that misses kills the job. The job restarts, replays from the last successful checkpoint, and arrives into a pipeline that is further behind than when it started. <b>That is the loop in chapter 6, and it is assembled entirely out of documented defaults.</b>',
+        'A checkpoint that takes too long is discarded at the default timeout of 10 minutes. And <code>tolerable-failed-checkpoints</code> defaults to 0, so the first checkpoint that misses fails the job. The job restarts, replays from the last successful checkpoint, and arrives into a pipeline that is further behind than when it started. That is the loop in <a href="#ops">Chapter 6</a>, and it is assembled entirely out of documented defaults.',
       focus: ['op', 'snap'],
       particles: [{ from: 'op', to: 'snap', color: C.bad }],
     },
     {
       title: 'Unaligned checkpoints: let the barrier jump the queue',
       prose:
-        'The escape hatch inverts the rule. With unaligned checkpoints the barrier <b>overtakes the buffered records</b>, and the in-flight data it jumped over is written into the snapshot instead — so the checkpoint captures the queue as well as the state. The docs put the win plainly: checkpoint duration <em>&ldquo;becomes independent of the current throughput.&rdquo;</em> The bill is equally plain: more bytes to the state store, on every checkpoint, forever. <b>It is off by default, and under sustained backpressure it is usually the right switch.</b>',
+        'The escape inverts the rule. With <em>unaligned checkpoints</em> the barrier overtakes the buffered records, and the in-flight data it jumped over is written into the snapshot instead, so the checkpoint captures the queue as well as the state. The documentation puts the gain plainly: checkpoint duration “becomes independent of the current throughput.” The cost is equally plain: more bytes to the state store, on every checkpoint, for as long as the job runs. It is off by default, and under sustained backpressure it is usually the right switch.',
       focus: ['fast', 'slow', 'op', 'snap'],
       particles: [
         { from: 'slow', to: 'snap', color: C.data },
@@ -179,14 +179,14 @@ export const fleetTrace: TraceSpec = {
     {
       title: 'One JobManager, and it is the thing you make redundant first',
       prose:
-        'The JobManager holds the execution graph, triggers checkpoints, and decides what restarts. It is <b>a single point of coordination</b>, which is why a production deployment always runs it with high availability — standby JobManagers plus ZooKeeper or the Kubernetes API for leader election and metadata. Without HA, losing it loses the running job and every checkpoint pointer it was holding.',
+        'The JobManager holds the execution graph, triggers checkpoints, and decides what restarts. It is a single point of coordination, which is why a production deployment always runs it with high availability: standby JobManagers, plus ZooKeeper or the Kubernetes API for leader election and metadata. Without that, losing the JobManager loses the running job and every checkpoint pointer it was holding.',
       focus: ['jm', 'zk'],
       particles: [{ from: 'jm', to: 'zk', color: C.data }],
     },
     {
       title: 'TaskManagers are slots, and a slot is a slice of the machine',
       prose:
-        'Each TaskManager offers a fixed number of <b>task slots</b> — <code>taskmanager.numberOfTaskSlots</code>, which defaults to <b>1</b> and is almost always raised. A slot takes one parallel slice of the whole pipeline, so slots are the unit you count: <em>a job of parallelism 12 needs 12 slots somewhere in the fleet</em>, and whether they sit on three machines or twelve changes the blast radius rather than the capacity.',
+        'Each TaskManager offers a fixed number of <em>task slots</em>, set by <code>taskmanager.numberOfTaskSlots</code>, which defaults to 1 and is almost always raised. A slot takes one parallel slice of the whole pipeline, so slots are the unit to count: a job of parallelism 12 needs 12 slots somewhere in the fleet, and whether they sit on three machines or twelve changes the size of a failure rather than the capacity.',
       focus: ['tm1', 'tm2', 'tm3'],
       particles: [
         { from: 'jm', to: 'tm1', color: C.data },
@@ -197,7 +197,7 @@ export const fleetTrace: TraceSpec = {
     {
       title: 'The checkpoint store is where the job actually lives',
       prose:
-        'Every TaskManager writes its slice of state to shared durable storage on each checkpoint. <b>This is the only copy that survives the fleet</b> — RocksDB on local disk is a working cache, not a home. The practical consequence is that your object store is on the critical path of a system you think of as in-memory, and its p99 write latency lands directly in your checkpoint duration.',
+        'On every checkpoint, each TaskManager writes its slice of state to shared durable storage. This is the only copy that survives the loss of the fleet; RocksDB on local disk is a working cache, not a home. The practical consequence is that your object store is on the critical path of a system you think of as in-memory, and its tail write latency lands directly in your checkpoint duration.',
       focus: ['tm1', 'tm2', 'tm3', 'ckpt'],
       particles: [
         { from: 'tm1', to: 'ckpt', color: C.store },
@@ -208,14 +208,14 @@ export const fleetTrace: TraceSpec = {
     {
       title: 'Savepoints are the ones with your name on them',
       prose:
-        'A checkpoint is the engine&rsquo;s own recovery artifact, owned by the engine and cleaned up by it — the default retention discards them when the job stops. A <b>savepoint</b> is the operator-triggered equivalent you keep: for upgrades, for rescaling, for rolling back a bad deploy. <em>The difference is ownership, and the day you need one is not the day to find out you had none.</em>',
+        'A checkpoint is the engine’s own recovery artifact, owned and cleaned up by the engine; the default retention discards checkpoints when the job stops. A <em>savepoint</em> is the operator-triggered equivalent that you keep, for upgrades, for rescaling, and for rolling back a bad deployment. The difference is ownership, and the day you need a savepoint is not the day to discover that you have none.',
       focus: ['tm1', 'save'],
       particles: [{ from: 'tm1', to: 'save', color: C.store }],
     },
     {
       title: 'And the thing that restarts is bigger than the thing that broke',
       prose:
-        'When one subtask dies, Flink restarts its whole <b>pipelined region</b> — for a job with an all-to-all shuffle, that is usually the entire graph. Every task redeploys, every slot re-downloads its state from the checkpoint store, and the job replays from the last successful checkpoint. <em>Recovery time is dominated by state download, not by the failure itself</em>, which is why state size per subtask is the number chapter 5 puts under your fingers.',
+        'When one subtask dies, Flink restarts its whole <em>pipelined region</em>, which for a job with an all-to-all shuffle is usually the entire graph. Every task is redeployed, every slot downloads its state again from the checkpoint store, and the job replays from the last successful checkpoint. Recovery time is dominated by the state download rather than by the failure itself, which is why state size per subtask is the number <a href="#scale-out">Chapter 5</a> puts under your control.',
       focus: ['ckpt', 'tm1', 'tm2', 'tm3'],
       particles: [
         { from: 'ckpt', to: 'tm1', color: C.bad },
