@@ -218,55 +218,55 @@ export const cascadeTrace: TraceSpec = {
     {
       title: 'A consumer deploy goes bad',
       prose:
-        'The orders-processing fleet ships a version whose handler hangs on a new downstream call. The processes are up, connections healthy, sockets open — they take deliveries and simply <b>never ack</b>. Every health check passes. <b>No alert fires.</b>',
+        'The orders-processing fleet ships a version whose handler hangs on a new downstream call. The processes are up, the connections healthy, the sockets open. They take deliveries and simply never acknowledge them. Every health check passes, and no alert fires.',
       focus: ['deploy'],
     },
     {
       title: 'Depth starts climbing',
       prose:
-        'Producers neither know nor care — <code>basic.publish</code> is fire-and-forget from their side. The orders queue starts accumulating: a thousand, a hundred thousand, a million. This is the moment a depth-<em>trend</em> alert earns its keep. Without one, nobody is watching a number that only ever meant &ldquo;fine&rdquo; before.',
+        'The producers neither know nor care, since <code>basic.publish</code> is fire-and-forget from their side. The orders queue starts to accumulate: a thousand messages, then a hundred thousand, then a million. This is the moment a depth-trend alert earns its keep. Without one, nobody is watching a number that has only ever meant “fine.”',
       focus: ['deploy', 'depth'],
       particles: [{ from: 'deploy', to: 'depth', color: AMBER }],
     },
     {
       title: 'The backlog eats the broker',
       prose:
-        'A million messages × payload + per-message bookkeeping, all in the queue process&apos;s heap. <b>Node RAM climbs</b> — and Erlang GC on a giant heap makes the queue slower as it grows. The broker is now degrading from the inside.',
+        'A million messages, each with its payload and its per-message bookkeeping, all in the queue process’s heap. Node memory climbs, and Erlang’s garbage collector on a very large heap makes the queue slower as it grows. The broker is now degrading from the inside.',
       focus: ['depth', 'ram'],
       particles: [{ from: 'depth', to: 'ram', color: AMBER }],
     },
     {
       title: 'Paging joins the hot path',
       prose:
-        'The broker pages the backlog to disk to protect memory — correct, and costly: the queue process now does disk I/O inside its one sequential loop. Publish and delivery latency on <em>this</em> queue jump; other queues on the node feel the disk contention. Still no page, in most shops.',
+        'The broker pages the backlog to disk to protect memory, which is correct and costly: the queue process now does disk I/O inside its one sequential loop. Publish and delivery latency on this queue jump, and other queues on the node feel the contention for the disk. In most installations there is still no page.',
       focus: ['depth', 'paging'],
       particles: [{ from: 'depth', to: 'paging', color: AMBER }],
     },
     {
       title: 'The watermark',
       prose:
-        'Paging can&apos;t keep pace with a firehose of new publishes. Resident memory crosses <code>vm_memory_high_watermark</code>. The node raises the <b>memory alarm</b> — and broadcasts it to the whole cluster.',
+        'Paging cannot keep pace with the stream of new publishes. Resident memory crosses <code>vm_memory_high_watermark</code>. The node raises the memory alarm and broadcasts it to the whole cluster.',
       focus: ['ram', 'alarm'],
       particles: [{ from: 'ram', to: 'alarm', color: RED }],
     },
     {
       title: 'Every publisher freezes',
       prose:
-        'The alarm blocks <b>all publishing connections on all nodes</b>. Payments, emails, analytics — teams that have never heard of the orders queue — every one of their publishes now <b>hangs silently</b>. One slow consumer fleet has stopped message ingress for the entire company.',
+        'The alarm blocks all publishing connections on all nodes. Payments, emails, analytics, teams that have never heard of the orders queue: every one of their publishes now hangs silently. One slow consumer fleet has stopped message ingress for the entire company.',
       focus: ['alarm', 'frozen'],
       particles: [{ from: 'alarm', to: 'frozen', color: RED }],
     },
     {
       title: 'The freeze walks upstream',
       prose:
-        'Services publish inline — inside request handlers, inside transactions. Those calls hang, thread pools drain, health checks start failing <em>upstream</em>. The incident channel says &ldquo;the API is down&rdquo; and &ldquo;RabbitMQ is down.&rdquo; Neither is true: one queue is full, and the broker is protecting itself exactly as documented.',
+        'Services publish inline, inside request handlers and inside transactions. Those calls hang, thread pools drain, and health checks start failing upstream. The incident channel says that the API is down and that RabbitMQ is down. Neither is true: one queue is full, and the broker is protecting itself exactly as documented.',
       focus: ['frozen', 'upstream'],
       particles: [{ from: 'frozen', to: 'upstream', color: RED }],
     },
     {
       title: 'The lesson: read it backwards',
       prose:
-        'Walk it back: hung API → blocked publishers → memory alarm → one queue&apos;s depth → yesterday&apos;s consumer deploy. The fixes are all <em>upstream of the alarm</em>: <b>alert on depth trend and consumer utilisation</b> (the two leading indicators), put <code>max-length</code> + TTL bulkheads on every queue so depth is bounded by design, give tenants per-vhost limits — and publish asynchronously, so a frozen broker degrades your features instead of hanging your threads.',
+        'Read it backwards: a hung API, blocked publishers, a memory alarm, one queue’s depth, yesterday’s consumer deploy. The fixes are all upstream of the alarm. Alert on the depth trend and on consumer utilisation, the two leading indicators; put <code>max-length</code> and TTL bulkheads on every queue so that depth is bounded by design; give tenants per-vhost limits; and publish asynchronously, so that a frozen broker degrades your features instead of hanging your threads.',
       focus: ['deploy', 'depth', 'ram', 'paging', 'alarm', 'frozen', 'upstream'],
       particles: [
         { from: 'upstream', to: 'deploy', color: VIO, via: [{ x: 76.5, y: 47 }, { x: 11.5, y: 47 }] },
