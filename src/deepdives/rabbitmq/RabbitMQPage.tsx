@@ -22,25 +22,35 @@ const CHAPTERS = [
   { id: 'sources', n: 9, title: 'Primary sources' },
 ]
 
+const CH_ID: Record<number, string> = Object.fromEntries(CHAPTERS.map((c) => [c.n, c.id]))
+
+/* Turn "Chapter N" inside a plain string into an in-page link to that chapter. */
+function withChapterLinks(text: string): React.ReactNode[] {
+  return text.split(/(Chapter \d(?!\d))/).map((part, i) => {
+    const m = /^Chapter (\d)$/.exec(part)
+    return m ? <a key={i} href={'#' + CH_ID[Number(m[1])]}>{part}</a> : part
+  })
+}
+
 const LIMITS: [string, string, string][] = [
-  ['Throughput / queue', '~50k msg/s transient', 'One queue = one Erlang process = one core. Durability discounts it steeply: quorum queues land at a fraction of transient throughput.'],
-  ['Scaling unit', 'more queues', 'Consumers on one queue share its single process; past the ceiling only sharding (consistent-hash exchange) adds capacity.'],
-  ['Backlog', 'RAM until paged', 'Messages wait in process heaps with per-message bookkeeping; deep backlogs degrade the queue serving them, then threaten the node.'],
-  ['Memory alarm', '40% of RAM', 'The watermark. Crossing it blocks every publishing connection cluster-wide — the single most important line in RabbitMQ operations.'],
-  ['Durability', 'majority fsync', 'Quorum queues confirm after a Raft majority persists the message — real guarantees, priced per message in latency and disk.'],
-  ['Message lifetime', 'deleted on ack', 'A message is a task, not a record: consumed once, then gone. No replay, no second reader — streams exist for that.'],
-  ['Connections & channels', 'stateful, costly', 'Multi-round-trip handshakes and broker-side processes each. Long-lived connections are mandatory; churn is a denial of service you run against yourself.'],
+  ['Throughput / queue', '~50k msg/s transient', 'One queue is one Erlang process, which runs on one core. Durability discounts this steeply: quorum queues reach a fraction of transient throughput.'],
+  ['Scaling unit', 'more queues', 'Consumers on one queue share its single process. Past that ceiling only sharding, with a consistent-hash exchange, adds capacity.'],
+  ['Backlog', 'RAM until paged', 'Messages wait in process heaps with per-message bookkeeping. A deep backlog first degrades the queue that holds it, then threatens the node.'],
+  ['Memory alarm', '40% of RAM', 'The watermark. Crossing it blocks every publishing connection across the cluster, which makes it the most important line in RabbitMQ operations.'],
+  ['Durability', 'majority fsync', 'A quorum queue confirms a message after a Raft majority has persisted it. The guarantee is real, and it is priced per message in latency and disk.'],
+  ['Message lifetime', 'deleted on ack', 'A message is a task rather than a record: consumed once, then gone. There is no replay and no second reader; streams exist for that.'],
+  ['Connections & channels', 'stateful, costly', 'Each needs a multi-round-trip handshake and a broker-side process. Long-lived connections are mandatory; churn is a denial of service you run against yourself.'],
 ]
 
 const FAILS: [string, string][] = [
-  ['The slow-consumer freeze', 'A consumer deploy hangs; depth grows; the watermark trips; every publisher in the company blocks — the full Chapter 6 cascade. Alert on depth trend + consumer utilisation, and bulkhead every queue.'],
-  ['The single fat queue', 'All traffic through one queue caps the system at one core, while sixteen consumers idle and the postmortem blames "RabbitMQ performance." Shard before the ceiling, not after.'],
-  ['Poison requeue loop', 'A malformed message fails, requeues, and returns forever — one core burning on a task that cannot succeed, real work queueing behind it. A retry cap + dead-letter exchange is table stakes on every queue.'],
-  ['The prefetch hoarder', 'One consumer with unlimited prefetch grabs the entire backlog; its peers starve; its memory balloons; when it dies, everything redelivers at once. Set prefetch everywhere — unlimited is never correct.'],
-  ['Memory-alarm gridlock', 'Team A’s backlog freezes team B’s publishers — who retry harder, holding connections open, keeping pressure on. Per-vhost limits and max-length turn a company-wide freeze back into one team’s bad day.'],
-  ['Connection-per-message churn', 'An integration opens a connection, publishes once, and closes — thousands of times a second. The node spends itself on handshakes; throughput collapses with every queue empty. Fix the client, not the broker.'],
-  ['The partition surprise', 'A network blip splits the cluster; pause_minority (correctly) halts the minority side — and nobody knew which services were connected to it. Know your partition-handling mode before the partition does.'],
-  ['The queue as a database', 'Using backlog as storage — "consumers will catch up eventually" — parks the system permanently next to the watermark. RabbitMQ is a conveyor; if data must rest, it belongs in a log (Kafka) or a store (Postgres).'],
+  ['The slow-consumer freeze', 'A consumer deploy hangs; depth grows; the watermark trips; every publisher in the company blocks. This is the full Chapter 6 cascade. Alert on the depth trend and on consumer utilisation, and give every queue a bulkhead.'],
+  ['The single fat queue', 'All traffic passes through one queue, which caps the system at one core while sixteen consumers sit idle, and the postmortem blames RabbitMQ performance. Shard before the ceiling, not after it.'],
+  ['Poison requeue loop', 'A malformed message fails, is requeued, and comes back forever, so one core burns on a task that cannot succeed while real work queues behind it. A retry cap and a dead-letter exchange belong on every queue.'],
+  ['The prefetch hoarder', 'One consumer with unlimited prefetch takes the entire backlog; its peers starve; its memory balloons; and when it dies, everything is redelivered at once. Set prefetch everywhere; unlimited is never correct.'],
+  ['Memory-alarm gridlock', 'Team A\u2019s backlog freezes team B\u2019s publishers, who retry harder, holding connections open and keeping the pressure on. Per-vhost limits and max-length turn a company-wide freeze back into one team\u2019s bad day.'],
+  ['Connection-per-message churn', 'An integration opens a connection, publishes once, and closes it, thousands of times a second. The node spends itself on handshakes and throughput collapses while every queue is empty. Fix the client, not the broker.'],
+  ['The partition surprise', 'A network blip splits the cluster, and pause_minority correctly halts the minority side, but nobody knew which services were connected to it. Know your partition-handling mode before the partition does.'],
+  ['The queue as a database', 'Using the backlog as storage, on the theory that consumers will catch up eventually, parks the system permanently next to the watermark. RabbitMQ is a conveyor; if data must rest, it belongs in a log such as Kafka or a store such as Postgres.'],
 ]
 
 function Ch({ id, n, title, children }: { id: string; n: number; title: string; children: React.ReactNode }) {
@@ -76,14 +86,15 @@ export default function RabbitMQPage() {
           <p className="h-kicker">Deep-dive · message broker</p>
           <h1 className="title">RabbitMQ</h1>
           <p className="lede">
-            RabbitMQ is the <b>opposite bet from Kafka</b>, made a decade earlier: put the
-            intelligence in the <b>broker</b> — routing, delivery tracking, per-message
-            acknowledgement, retries, dead-lettering — so that clients stay simple and messages
-            behave like <em>tasks</em>, not log entries. Every strength (routing topologies,
-            backpressure, work distribution) and every constraint (the one-core queue, the memory
-            watermark, no replay) follows from that one choice. This page walks the system the way
-            you&apos;d want it explained: <b>what the broker actually does with one message</b>,
-            what hardware it consumes, and only then how it scales.
+            RabbitMQ makes the opposite decision from Kafka, and made it a decade earlier: the
+            intelligence lives in the <em>broker</em>. Routing, delivery tracking, per-message
+            acknowledgement, retries and dead-lettering are all the broker&apos;s job, so that
+            clients stay simple and a message behaves like a task rather than like an entry in a
+            log. Each of its strengths (routing topologies, backpressure, work distribution) and
+            each of its constraints (the one-core queue, the memory watermark, the absence of
+            replay) follows from that one choice. This page walks the system in the order you
+            would want it explained: what the broker does with one message, what hardware that
+            consumes, and only then how it scales.
           </p>
 
           <IdeaStrip
@@ -95,69 +106,88 @@ export default function RabbitMQPage() {
 
           <Ch id="abstraction" n={1} title="The core abstraction: the smart broker">
             <p>
-              The AMQP model is three objects and a contract. Producers publish to{' '}
-              <b>exchanges</b> (named routers), exchanges match <b>bindings</b> (routing rules) to
-              deliver into <b>queues</b>, and queues push to consumers who must{' '}
-              <b>acknowledge</b> each message — at which point it is deleted. The broker owns the
-              whole lifecycle: it knows every unacked delivery, redelivers on failure, expires,
-              dead-letters, and prioritizes. A message is a <em>unit of work with a chain of
-              custody</em>, and the broker is the custodian.
+              Consider the problem a message broker was invented for. One service has a piece of
+              work that another should do: send this email, charge this card, resize this image.
+              The producer does not want to know which service will do it, how many instances
+              there are, or whether any of them is running right now. It does want each task done
+              once, retried if the worker fails midway, and set aside for a human if it keeps
+              failing.
             </p>
             <p>
-              Compare the Kafka page&apos;s opening move: Kafka made the broker <em>dumb</em> — an
-              append-only log that tracks nothing per consumer — and pushed all delivery
-              intelligence to clients, buying colossal throughput. RabbitMQ keeps the intelligence
-              central and pays for it <b>per message</b>: routing computation, delivery state,
-              ack bookkeeping. That price sets every ceiling in Chapter 3 — and buys semantics
-              Kafka cannot express: route this message to <em>these</em> queues, retry it three
-              times, then park it for a human.
+              There are two obvious ways to get this without a broker. A table in a database
+              works as a queue: workers poll it, lock a row, do the work and delete the row. That
+              costs a poll loop per worker and lock contention under load, and fan-out to several
+              consumers means several tables. <Link to="/ddia/components/kafka">Kafka&apos;s
+              log</Link> keeps the broker simple by making each consumer track its own position,
+              which gives replay and enormous throughput, but it has no notion of an individual
+              message being done, retried, or routed to one queue rather than another.
+            </p>
+            <p>
+              The AMQP model that RabbitMQ implements is three objects and a contract. Producers
+              publish to <em>exchanges</em>, which are named routers. An exchange matches its{' '}
+              <em>bindings</em>, which are routing rules, to deliver a copy of the message into
+              one or more <em>queues</em>. Queues push messages to consumers, and a consumer must{' '}
+              <em>acknowledge</em> each message, at which point it is deleted. The broker owns the
+              whole lifecycle: it knows every delivery that has not yet been acknowledged,
+              redelivers after a failure, expires, dead-letters and prioritizes. A message is a
+              unit of work with a chain of custody, and the broker is the custodian.
+            </p>
+            <p>
+              The cost of keeping the intelligence in the broker is paid per message: routing
+              computation, delivery state, and acknowledgement bookkeeping for every one. That
+              price sets every ceiling in <a href="#hardware">Chapter 3</a>. What it buys is a set of semantics a log
+              cannot express: deliver this message to these queues, retry it three times, then
+              park it for a human.
             </p>
             <div className="note">
-              <b>The lineage.</b> Kafka bet on the log; Postgres on WAL + MVCC; Redis on RAM +
-              one thread. RabbitMQ&apos;s bet is the <em>actor model</em>: everything — every
-              queue, channel, connection — is an isolated Erlang process passing messages. The
-              broker for messages is itself built out of message passing, and its scaling law
-              (Chapter 2&apos;s second trace) falls straight out of that.
+              <b>The lineage.</b> Kafka is built on the log, Postgres on the write-ahead log and
+              MVCC, Redis on RAM and a single thread. RabbitMQ is built on the{' '}
+              <em>actor model</em>: every queue, channel and connection is an isolated Erlang
+              process that communicates by passing messages. The broker for messages is itself
+              made of message passing, and its scaling law, which the second trace in <a href="#anatomy">Chapter 2</a>
+              shows, follows directly from that.
             </div>
           </Ch>
 
           <Ch id="anatomy" n={2} title="Anatomy of the broker">
             <p>
-              Press play and follow one message from <code>basic.publish</code> to the ack that
-              deletes it — through the exchange, the binding trie, the queue process, and the
-              prefetch window:
+              Press play and follow one message from <code>basic.publish</code> to the
+              acknowledgement that deletes it, through the exchange, the binding trie, the queue
+              process and the prefetch window.
             </p>
             <TracePlayer spec={publishTrace} />
             <p>
-              The trace above shows the happy path through <em>one</em> queue. The second trace is
-              the system&apos;s strangest and most consequential truth: what a queue actually{' '}
-              <em>is</em> — and what happens on the day consumers slow down:
+              The trace above is the ordinary path through one queue. The second trace shows the
+              most consequential fact about the system, what a queue actually is, and what
+              happens on the day the consumers slow down.
             </p>
             <TracePlayer spec={beamTrace} />
             <h3>The background cast</h3>
             <p>
-              Around the message path run the maintenance machinery: the <b>management/metrics
-              database</b> aggregating stats from every process (its UI is the ops console of
-              Chapter 6); <b>Raft ticks</b> keeping quorum queue members in step; the{' '}
-              <b>message store</b> compacting segment files; per-process <b>Erlang GC</b>{' '}
-              collecting each actor&apos;s heap independently; and <b>cluster heartbeats</b>{' '}
-              watching for partitions. Every one of them reappears by name in the runbook.
+              Around the message path runs the maintenance machinery. The management and metrics
+              database aggregates statistics from every process, and its user interface is the
+              operations console of <a href="#ops">Chapter 6</a>. Raft ticks keep the members of each quorum queue
+              in step. The message store compacts its segment files. Erlang&apos;s garbage
+              collector runs per process, collecting each actor&apos;s heap independently. And
+              cluster heartbeats watch for network partitions. Each of these reappears by name in
+              the runbook.
             </p>
           </Ch>
 
           <Ch id="hardware" n={3} title="The hardware envelope">
             <p>
-              RabbitMQ&apos;s envelope has a split personality. <b>Across</b> queues it scales
-              like a normal multicore system — the BEAM spreads processes over every core.{' '}
-              <b>Within</b> a queue it is Redis all over again: one process, one core, a hard
-              ceiling. And hovering above both is a line no other system on this site has:{' '}
-              <b>the watermark</b> — the memory level where the node stops <em>everyone&apos;s</em>{' '}
-              publishers, cluster-wide. Pick a shape and push:
+              RabbitMQ&apos;s envelope has two sides. Across queues, it scales like an ordinary
+              multicore system, because the BEAM spreads processes over every core. Within a
+              queue, it behaves like <Link to="/ddia/components/redis">Redis</Link>: one process,
+              one core, a hard ceiling. And above both sits a line no other system on this site
+              has, the <em>watermark</em>, which is the memory level at which the node stops every
+              publisher on every node of the cluster. Pick a shape and push the workload until a
+              meter turns red.
             </p>
             <HardwareEnvelope />
             <p className="fl-src-note">
-              Ceilings are order-of-magnitude for small messages; the 40% watermark default and
-              alarm behavior are from the{' '}
+              Ceilings are order-of-magnitude figures for small messages. The 40% watermark
+              default and the alarm behaviour are from the{' '}
               <a href="https://www.rabbitmq.com/docs/memory" target="_blank" rel="noreferrer">
                 memory documentation
               </a>
@@ -167,78 +197,81 @@ export default function RabbitMQPage() {
 
           <Ch id="scale-up" n={4} title="Scaling up — cores help, with a catch">
             <p>
-              Unlike Redis, a bigger box genuinely helps — <b>if your queue count cooperates</b>.
-              More cores run more queue processes in parallel; a node with 16 cores and 200 queues
-              uses them all. More RAM moves the watermark up, buying tolerance for bursts and
-              bigger in-flight windows. Faster NVMe directly cuts confirm latency for durable and
-              quorum traffic, since a majority fsync sits on the write path of every confirmed
-              publish.
+              Unlike Redis, a bigger machine genuinely helps, provided the number of queues
+              cooperates. More cores run more queue processes in parallel; a node with 16 cores
+              and 200 queues uses all of them. More memory moves the watermark up, which buys
+              tolerance for bursts and larger in-flight windows. Faster NVMe directly reduces
+              confirm latency for durable and quorum traffic, since a majority fsync sits on the
+              write path of every confirmed publish.
             </p>
             <p>
-              The catches are structural. A <b>single hot queue</b> gets nothing from any of it —
-              its ceiling is one process on one core, whatever the box. RAM spent tolerating
-              deeper backlogs is spent <em>enabling the anti-pattern</em>: the system is designed
-              for empty queues, and hardware that lets debt accumulate quietly just moves the
-              cliff. And bigger nodes mean bigger blast radii — more queue leaders failing over at
-              once, longer quorum re-syncs. The estate answer (Chapter 7) is the same as
-              Kafka&apos;s and Redis&apos;s: <b>modest nodes, more of them, leaders spread</b>.
+              The caveats are structural. A single hot queue gains nothing from any of this,
+              because its ceiling is one process on one core whatever the machine. Memory spent
+              tolerating deeper backlogs is spent enabling the anti-pattern: the system is
+              designed for empty queues, and hardware that lets debt accumulate quietly only
+              moves the cliff further out. And bigger nodes mean larger failures, with more queue
+              leaders failing over at once and longer quorum re-synchronisation. The conclusion
+              in <a href="#bigfleet">Chapter 7</a> is the same one the Kafka and Redis pages reached: modest nodes, more
+              of them, with leaders spread across them.
             </p>
           </Ch>
 
           <Ch id="scale-out" n={5} title="Scaling out — two ceilings, one backlog">
             <p>
-              Every RabbitMQ capacity question reduces to two independent ceilings: the{' '}
-              <b>queue&apos;s</b> (one core per queue — raise it by sharding into more queues) and
-              the <b>fleet&apos;s</b> (consumers × per-message handler time — raise it with more
-              consumers or faster handlers). Whichever binds first, the symptom is identical:{' '}
-              <b>backlog</b>, and Chapter 2 showed where backlog leads. The sandbox puts both
-              ceilings under your fingers:
+              Every RabbitMQ capacity question reduces to two independent ceilings. The
+              queue&apos;s ceiling is one core per queue, and it is raised by sharding into more
+              queues. The fleet&apos;s ceiling is the number of consumers multiplied by the
+              per-message handler time, and it is raised by adding consumers or by making
+              handlers faster. Whichever binds first, the symptom is the same, a growing{' '}
+              <em>backlog</em>, and <a href="#anatomy">Chapter 2</a> showed where a backlog leads. The sandbox puts both
+              ceilings under your control.
             </p>
             <Sandbox content={{ inputs: scaleOutInputs, compute: computeScaleOut }} />
             <div className="boundary">
               <h3>The scaling ladder — apply in order</h3>
               <ol className="ladder">
-                <li><b>Keep queues empty</b> — depth is debt. Bulkhead every queue with max-length + TTL so the debt is bounded by design.</li>
-                <li><b>Tune prefetch and handlers</b> — prefetch ≈ rate × RTT, and a 5 ms handler beats ten new consumers. Cheapest capacity there is.</li>
-                <li><b>Add consumers</b> up to the queue&apos;s own ceiling — the easy direction while it lasts.</li>
-                <li><b>Shard into more queues</b> (consistent-hash exchange) — the real unit of broker scaling, across cores and nodes.</li>
-                <li><b>Add nodes</b> and spread quorum leaders so every node carries its share.</li>
-                <li><b>Split the estate</b> — per-team vhosts with limits, separate clusters per workload class, and streams or Kafka for the firehoses.</li>
+                <li><b>Keep queues empty.</b> Depth is debt. Give every queue a max-length and a TTL so that the debt is bounded by design.</li>
+                <li><b>Tune prefetch and handlers.</b> Prefetch should be roughly the rate multiplied by the round-trip time, and a 5 ms handler is worth more than ten new consumers. This is the cheapest capacity there is.</li>
+                <li><b>Add consumers,</b> up to the queue&apos;s own ceiling. This is the easy direction, for as long as it lasts.</li>
+                <li><b>Shard into more queues,</b> with a consistent-hash exchange. This is the real unit of broker scaling, across cores and across nodes.</li>
+                <li><b>Add nodes,</b> and spread the quorum leaders so that every node carries its share.</li>
+                <li><b>Split the estate:</b> a vhost per team with limits, separate clusters per class of workload, and streams or Kafka for the firehoses.</li>
               </ol>
             </div>
           </Ch>
 
           <Ch id="ops" n={6} title="Operations: the pager view">
             <p>
-              The defining RabbitMQ incident is not a crash — the broker is famously hard to
-              kill. It is a <b>freeze</b>: the broker protecting itself, exactly as documented,
-              from a backlog somebody else created. The cascade below is the one every RabbitMQ
-              operator eventually meets. Play it, then keep the runbook:
+              The defining RabbitMQ incident is not a crash; the broker is notably hard to kill.
+              It is a <em>freeze</em>, in which the broker protects itself, exactly as documented,
+              from a backlog that somebody else created. The cascade below is the one every
+              RabbitMQ operator eventually meets. Play it, and then keep the runbook that follows.
             </p>
             <TracePlayer spec={cascadeTrace} />
             <h3>The metrics that matter — a runbook</h3>
             <p>
-              Tap any metric for the full card: what healthy looks like, what a spike means, what
-              breaks next, likely causes ranked common-to-rare, and what you actually do — safest
-              action first.
+              Select any metric to see its full card: what a healthy value looks like, what a
+              change in it means, what breaks next, the likely causes from most to least common,
+              and what to do about it, starting with the safest action.
             </p>
             <MetricRunbook cards={METRICS} />
             <div className="note">
-              <b>The operating mindset.</b> Queue depth is the master signal — everything else
-              orbits it. Alert on the <em>leading</em> pair (depth trend, consumer utilisation),
-              bulkhead so no single queue can reach the watermark, and when the freeze comes
-              anyway, remember: the broker is almost never the broken thing. <em>Look at the
-              consumers first.</em>
+              <b>The operating mindset.</b> Queue depth is the master signal, and everything else
+              orbits it. Alert on the two leading indicators, the depth trend and consumer
+              utilisation; put bulkheads in place so that no single queue can reach the
+              watermark; and when the freeze comes anyway, remember that the broker is almost
+              never the broken thing. Look at the consumers first.
             </div>
           </Ch>
 
           <Ch id="bigfleet" n={7} title="What a real messaging estate looks like">
             <p>
-              Production RabbitMQ rarely looks like one big cluster. It looks like an{' '}
-              <b>estate</b>: several bounded clusters (three or five nodes each), per-team vhosts
-              with limits, a dead-letter topology beside every work queue, async federation
-              between data centers — and, in mature shops, an honest boundary where log-shaped
-              traffic is handed to streams or Kafka. The numbers that define the shape:
+              Production RabbitMQ rarely looks like one large cluster. It looks like an{' '}
+              <em>estate</em>: several bounded clusters of three or five nodes each, a vhost per
+              team with limits, a dead-letter topology beside every work queue, asynchronous
+              federation between data centres, and, in mature installations, an explicit boundary
+              at which log-shaped traffic is handed to streams or to Kafka. The numbers that
+              define the shape:
             </p>
             <div className="bigfacts">
               <div className="bigfact"><div className="bf-v">1M+/s</div><div className="bf-k">messages per second</div><div className="bf-s">the classic 30-node benchmark (2013)</div></div>
@@ -247,10 +280,10 @@ export default function RabbitMQPage() {
               <div className="bigfact"><div className="bf-v">2–5×</div><div className="bf-k">throughput cost</div><div className="bf-s">transient → fully durable quorum</div></div>
             </div>
             <p>
-              Below, that estate walked end to end — connections, quorum writes, the dead-letter
-              parking lot, bulkheads, federation, and the handoff. Note how many steps are the
-              same lesson Kafka&apos;s and Redis&apos;s Chapter 7 taught:{' '}
-              <em>many bounded clusters, loosely coupled, blast radius by design</em>:
+              The trace below walks that estate from end to end: connections, quorum writes, the
+              dead-letter parking lot, bulkheads, federation, and the handoff. Many of its steps
+              are the lesson the Kafka and Redis pages taught in their own seventh chapters: many
+              bounded clusters, loosely coupled, with the size of a failure decided in advance.
             </p>
             <TracePlayer spec={estateTrace} />
             <p className="fl-src-note">
@@ -273,7 +306,7 @@ export default function RabbitMQPage() {
                   <tr key={r[0]}>
                     <td>{r[0]}</td>
                     <td><code>{r[1]}</code></td>
-                    <td>{r[2]}</td>
+                    <td>{withChapterLinks(r[2])}</td>
                   </tr>
                 ))}
               </tbody>
@@ -282,7 +315,7 @@ export default function RabbitMQPage() {
               {FAILS.map((f) => (
                 <div className="fail" key={f[0]}>
                   <div className="fn">{f[0]}</div>
-                  <p className="fd">{f[1]}</p>
+                  <p className="fd">{withChapterLinks(f[1])}</p>
                 </div>
               ))}
             </div>
@@ -295,35 +328,35 @@ export default function RabbitMQPage() {
                 <a href="https://www.rabbitmq.com/tutorials/amqp-concepts" target="_blank" rel="noreferrer">
                   RabbitMQ documentation — “AMQP 0-9-1 Model Explained”
                 </a>
-                <p>Exchanges, bindings, queues, acks, prefetch — Chapter 1 and the publish trace, stated precisely. One of the best conceptual docs any messaging system has produced.</p>
+                <p>Exchanges, bindings, queues, acknowledgements, prefetch: <a href="#abstraction">Chapter 1</a> and the publish trace, stated precisely. One of the best conceptual documents any messaging system has produced.</p>
               </div>
               <div className="src">
                 <div className="s-k">The paper</div>
                 <a href="https://raft.github.io/raft.pdf" target="_blank" rel="noreferrer">
                   Ongaro &amp; Ousterhout — “In Search of an Understandable Consensus Algorithm” (Raft, 2014)
                 </a>
-                <p>Quorum queues are Raft groups — this is their spec. Reading it now pays twice: it&apos;s also the foundation of the planned etcd deep-dive, and of Kafka&apos;s KRaft.</p>
+                <p>Quorum queues are Raft groups, and this paper is their specification. Reading it now pays twice, since it is also the foundation of the planned etcd deep-dive and of Kafka&apos;s KRaft.</p>
               </div>
               <div className="src">
                 <div className="s-k">The deep read</div>
                 <a href="https://jack-vanlightly.com/blog/2018/6/29/quorum-queues-making-rabbitmq-more-competitive" target="_blank" rel="noreferrer">
                   Jack Vanlightly — the quorum queues &amp; RabbitMQ internals series
                 </a>
-                <p>The most rigorous public writing on RabbitMQ&apos;s replication, fsync behavior, and failure modes — by an engineer who later helped build it. Start anywhere; read all of it.</p>
+                <p>The most rigorous public writing on RabbitMQ&apos;s replication, fsync behaviour and failure modes, by an engineer who later helped build it. Start anywhere, and read all of it.</p>
               </div>
               <div className="src">
                 <div className="s-k">The comparison</div>
                 <a href="https://jack-vanlightly.com/blog/2017/12/4/rabbitmq-vs-kafka-part-1-messaging-topologies" target="_blank" rel="noreferrer">
                   Jack Vanlightly — “RabbitMQ vs Kafka” series
                 </a>
-                <p>The definitive treatment of the smart-broker vs dumb-broker trade this page opened with — topology by topology, guarantee by guarantee, with the failure cases most comparisons skip.</p>
+                <p>The definitive treatment of the smart-broker versus dumb-broker trade this page opened with, topology by topology and guarantee by guarantee, including the failure cases most comparisons leave out.</p>
               </div>
               <div className="src">
                 <div className="s-k">The ops bible</div>
                 <a href="https://www.rabbitmq.com/docs/alarms" target="_blank" rel="noreferrer">
                   RabbitMQ documentation — memory &amp; disk alarms
                 </a>
-                <p>The watermark, the blocking behavior, and paging — the Chapter 6 cascade in the vendor&apos;s own words. Short; every on-call engineer should have read it before the first freeze, not after.</p>
+                <p>The watermark, the blocking behaviour and paging: the <a href="#ops">Chapter 6</a> cascade in the vendor&apos;s own words. It is short, and every on-call engineer should have read it before the first freeze rather than after.</p>
               </div>
             </div>
           </Ch>
