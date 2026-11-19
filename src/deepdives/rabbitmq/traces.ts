@@ -36,63 +36,63 @@ export const publishTrace: TraceSpec = {
     {
       title: 'Publish on a channel',
       prose:
-        'The producer publishes over a <b>channel</b> — a lightweight session multiplexed onto one long-lived TCP connection (connections are expensive here; channels are how you get concurrency without paying for sockets). With <b>publisher confirms</b> on, the broker will ack this publish asynchronously once the message is safe — the producer&apos;s only durability signal, so production code always turns it on.',
+        'The producer publishes over a <em>channel</em>, a lightweight session multiplexed onto one long-lived TCP connection. Connections are expensive here, and channels are how you get concurrency without paying for more sockets. With publisher confirms enabled, the broker acknowledges the publish asynchronously once the message is safe. That acknowledgement is the producer’s only durability signal, so production code always turns it on.',
       focus: ['prod', 'chan'],
       particles: [{ from: 'prod', to: 'chan', color: C.client }],
     },
     {
       title: 'The exchange — routing as a first-class object',
       prose:
-        'The message arrives at an <b>exchange</b> with a routing key like <code>orders.eu.created</code>. The producer knows <em>nothing about queues</em> — who consumes, how many copies, whether anyone is listening. That indirection is the heart of the smart-broker bet: topology lives in the broker, so producers and consumers evolve independently.',
+        'The message arrives at an <em>exchange</em> with a routing key such as <code>orders.eu.created</code>. The producer knows nothing about queues: not who consumes, not how many copies are made, not whether anyone is listening at all. That indirection is the heart of the smart-broker design. The topology lives in the broker, so producers and consumers can change independently.',
       focus: ['chan', 'ex'],
       particles: [{ from: 'chan', to: 'ex', color: C.client, via: [{ x: 25, y: 25 }, { x: 25, y: 12 }] }],
     },
     {
       title: 'Binding match',
       prose:
-        'The exchange consults its <b>bindings</b> — for a topic exchange, a trie of patterns (<code>orders.#</code>, <code>*.eu.*</code>) matched against the routing key; fanout copies to every bound queue; direct matches exactly; headers match on metadata. This routing work is paid <b>per message, broker-side</b> — flexibility Kafka simply refuses to offer, at a per-message cost Kafka refuses to pay.',
+        'The exchange consults its <em>bindings</em>. For a topic exchange that is a trie of patterns (<code>orders.#</code>, <code>*.eu.*</code>) matched against the routing key; a fanout exchange copies to every bound queue; a direct exchange matches exactly; a headers exchange matches on metadata. This routing work is done per message, on the broker, which is a flexibility Kafka does not offer, at a per-message cost Kafka does not pay.',
       focus: ['ex', 'bind'],
       particles: [{ from: 'ex', to: 'bind', color: C.machine }],
     },
     {
       title: 'Into the queue process',
       prose:
-        'Each matched queue is <b>one Erlang process</b> — an actor with a mailbox, processing messages strictly in order. FIFO comes free from the actor model, and so does the ceiling that defines Chapter 3: <em>one queue can never use more than one core</em>. Sixteen consumers on one queue still share one sequential process.',
+        'Each matched queue is one Erlang process: an actor with a mailbox, processing messages strictly in order. FIFO ordering comes free from the actor model, and so does the ceiling that defines <a href="#hardware">Chapter 3</a>: one queue can never use more than one core. Sixteen consumers on one queue still share one sequential process.',
       focus: ['bind', 'qproc'],
       particles: [{ from: 'bind', to: 'qproc', color: C.queue }],
     },
     {
       title: 'Persistence, if you asked',
       prose:
-        'A persistent message on a durable queue is written to the <b>message store</b> (batched fsyncs), and only then is the publisher&apos;s confirm released. For <b>quorum queues</b> the bar is higher still: the message is a Raft log entry, confirmed after a <em>majority of replicas</em> fsync it. Durability here is per-message and explicit — and each level of it costs throughput (Chapter 3 prices it).',
+        'A persistent message on a durable queue is written to the <em>message store</em>, with batched fsyncs, and only then is the publisher’s confirm released. For a <em>quorum queue</em> the bar is higher still: the message is an entry in a Raft log, confirmed after a majority of replicas have fsynced it. Durability here is per message and explicit, and each level of it costs throughput, which <a href="#hardware">Chapter 3</a> prices.',
       focus: ['qproc', 'store'],
       particles: [{ from: 'qproc', to: 'store', color: C.store }],
     },
     {
       title: 'Credit — backpressure by design',
       prose:
-        'Every hop grants <b>credit</b> to the previous one: bindings to channels, queues to bindings. A queue that can&apos;t keep up stops granting; the channel stops reading its socket; TCP pushes back to the producer. RabbitMQ <em>slows publishers down</em> rather than dropping or endlessly buffering — the polite version of what Chapter 2&apos;s second trace shows happening rudely.',
+        'Every hop grants <em>credit</em> to the one before it: bindings to channels, queues to bindings. A queue that cannot keep up stops granting credit; the channel stops reading its socket; TCP pushes back on the producer. RabbitMQ slows publishers down rather than dropping messages or buffering without limit. This is the orderly version of what the second trace in <a href="#anatomy">Chapter 2</a> shows happening in a disorderly one.',
       focus: ['credit', 'qproc'],
       particles: [{ from: 'qproc', to: 'credit', color: C.danger }],
     },
     {
       title: 'Push to the consumer, bounded by prefetch',
       prose:
-        'The broker <b>pushes</b> deliveries to consumers (Kafka&apos;s consumers pull — the inversions keep stacking). <b>Prefetch</b> caps how many unacked messages a consumer may hold: too low and it starves waiting on round-trips; unlimited and one consumer hoards the whole backlog while its peers idle. Per-consumer prefetch is the single most important client-side knob.',
+        'The broker pushes deliveries to consumers, whereas Kafka’s consumers pull; the inversions keep accumulating. <em>Prefetch</em> caps how many unacknowledged messages a consumer may hold at once. Set too low, the consumer starves waiting on round trips; set to unlimited, one consumer hoards the whole backlog while its peers sit idle. Per-consumer prefetch is the most important client-side setting.',
       focus: ['qproc', 'cons'],
       particles: [{ from: 'qproc', to: 'cons', color: C.queue, via: [{ x: 48.75, y: 18.5 }, { x: 74.5, y: 18.5 }, { x: 74.5, y: 13 }] }],
     },
     {
       title: 'Ack — and the message dies',
       prose:
-        'The consumer processes and sends <code>basic.ack</code> with its delivery tag; the broker clears it from <b>unacked tracking</b> and the message is <b>deleted</b>. This is the defining queue semantic: a message is a <em>task</em>, consumed once and gone — not Kafka&apos;s log entry that outlives its readers. No replay, no second consumer group, no reprocessing last Tuesday. (Streams, in Chapter 7, are Rabbit&apos;s answer when you want that back.)',
+        'The consumer processes the message and sends <code>basic.ack</code> with its delivery tag; the broker clears it from the unacknowledged set and deletes the message. This is the defining semantic of a queue: a message is a task, consumed once and then gone, rather than a log entry that outlives its readers. There is no replay, no second consumer group, no reprocessing of last Tuesday. Streams, in <a href="#bigfleet">Chapter 7</a>, are RabbitMQ’s answer when you want that back.',
       focus: ['cons', 'unack', 'qproc'],
       particles: [{ from: 'cons', to: 'unack', color: C.client }],
     },
     {
       title: 'Reject → dead letter',
       prose:
-        'If the consumer <code>nack</code>s with <code>requeue=false</code> — or the message expires (TTL) or overflows <code>max-length</code> — it routes to the <b>dead-letter exchange</b> instead of vanishing: the escape hatch for poison messages and the building block for retry-with-backoff topologies. Skip configuring it and a failing message redelivers forever, burning a queue&apos;s one core on a task that will never succeed (Chapter 8).',
+        'If the consumer sends a <code>nack</code> with <code>requeue=false</code>, or the message expires under a TTL, or it overflows <code>max-length</code>, it is routed to the <em>dead-letter exchange</em> instead of vanishing. This is the escape hatch for poison messages and the building block for retry-with-backoff topologies. Leave it unconfigured and a failing message is redelivered forever, burning a queue’s one core on a task that will never succeed (<a href="#boundaries">Chapter 8</a>).',
       focus: ['cons', 'dlx'],
       particles: [{ from: 'cons', to: 'dlx', color: C.machine }],
     },
@@ -123,7 +123,7 @@ export const beamTrace: TraceSpec = {
     {
       title: 'An actor per queue',
       prose:
-        'RabbitMQ runs on the <b>BEAM</b> — Erlang&apos;s VM, built for telephone switches: millions of lightweight processes, preemptively scheduled across <b>one scheduler per core</b>. Every queue, channel, and connection is such a process. The design gift: isolation and FIFO for free. The design bill: <em>one queue is one process</em>, and a process runs on one core at a time.',
+        'RabbitMQ runs on the <em>BEAM</em>, Erlang’s virtual machine, which was built for telephone switches: millions of lightweight processes, preemptively scheduled, with one scheduler per core. Every queue, channel and connection is such a process. The gift of the design is isolation and FIFO ordering for free. The bill is that one queue is one process, and a process runs on one core at a time.',
       focus: ['pubs', 'sched', 'q1'],
       particles: [
         { from: 'pubs', to: 'sched', color: C.client, count: 2 },
@@ -133,48 +133,48 @@ export const beamTrace: TraceSpec = {
     {
       title: 'Queues in parallel',
       prose:
-        'The saving grace Redis doesn&apos;t have: RabbitMQ parallelizes <b>across queues</b>. A hundred queues spread across sixteen cores use them all — the broker scales with queue count, which is why Chapter 5&apos;s answer to nearly everything is &ldquo;more queues.&rdquo; But no amount of hardware helps <em>within</em> one queue; that ceiling is architectural.',
+        'The saving grace that Redis lacks is that RabbitMQ parallelises across queues. A hundred queues spread over sixteen cores use all of them, so the broker scales with the number of queues, which is why <a href="#scale-out">Chapter 5</a>’s answer to nearly everything is “more queues.” No amount of hardware helps within one queue; that ceiling is architectural.',
       focus: ['q1', 'q2', 'sched'],
       particles: [{ from: 'sched', to: 'q2', color: C.queue }],
     },
     {
       title: 'A healthy queue is empty',
       prose:
-        'RabbitMQ&apos;s design assumption — the exact opposite of Kafka&apos;s — is that messages <b>flow through</b>: published, delivered, acked, deleted within milliseconds. RAM holds only what&apos;s in flight. A queue with a standing backlog isn&apos;t a buffer doing its job; it&apos;s an incident with a slow fuse.',
+        'RabbitMQ’s design assumption, the exact opposite of Kafka’s, is that messages flow through: published, delivered, acknowledged and deleted within milliseconds. Memory holds only what is in flight. A queue with a standing backlog is not a buffer doing its job; it is an incident with a slow fuse.',
       focus: ['q1', 'ram'],
     },
     {
       title: 'Backlog — the poison',
       prose:
-        'Now consumers slow down (a deploy, a dependency, a vacation). Publishes keep landing, and every unconsumed message sits in <b>process heaps</b> — with per-message bookkeeping on top of the payload. Erlang GC pressure grows with heap size, so the queue process itself gets slower <em>as</em> it gets fuller. The debt compounds, quietly.',
+        'Now the consumers slow down, because of a deploy, a dependency or a holiday. Publishes keep arriving, and every unconsumed message sits in a process heap, with per-message bookkeeping on top of the payload. Erlang’s garbage-collection cost grows with heap size, so the queue process gets slower as it gets fuller. The debt compounds quietly.',
       focus: ['pubs', 'ram'],
       particles: [{ from: 'pubs', to: 'ram', color: C.danger, via: [{ x: 25, y: 13 }, { x: 25, y: 25 }] }],
     },
     {
       title: 'Paging buys time, costs latency',
       prose:
-        'The broker defends its RAM by <b>paging</b> messages to disk (the v2 message store does this aggressively; &ldquo;lazy queues&rdquo; made it the default posture in 3.12+). It works — millions of messages can wait on disk — but the queue is now doing disk I/O <em>inside</em> its one sequential process. Throughput drops exactly when you need it most.',
+        'The broker defends its memory by <em>paging</em> messages to disk. The v2 message store does this aggressively, and “lazy queues” made it the default posture from 3.12 onwards. It works, in that millions of messages can wait on disk, but the queue is now doing disk I/O inside its one sequential process. Throughput falls exactly when it is needed most.',
       focus: ['ram', 'page'],
       particles: [{ from: 'ram', to: 'page', color: C.store }],
     },
     {
       title: 'The alarm',
       prose:
-        'Memory keeps climbing past <code>vm_memory_high_watermark</code> — <b>40% of RAM by default</b>. The broker declares a <b>memory alarm</b>. This is not a log line; it is a cluster-wide state change, and what happens next is the most famous behavior in RabbitMQ operations.',
+        'Memory keeps climbing past <code>vm_memory_high_watermark</code>, which is 40% of RAM by default. The broker declares a <em>memory alarm</em>. This is not a log line; it is a cluster-wide change of state, and what happens next is the most famous behaviour in RabbitMQ operations.',
       focus: ['ram', 'alarm'],
       particles: [{ from: 'ram', to: 'alarm', color: C.danger }],
     },
     {
       title: 'Everyone stops',
       prose:
-        'The alarm <b>blocks every publishing connection on every node</b> — not just to the bloated queue, to <em>all</em> queues. One team&apos;s slow consumer has frozen every producer in the company. Publishers don&apos;t get errors; their <code>publish</code> calls simply <b>hang</b>, which is how the freeze propagates upstream into web handlers (Chapter 6 plays the full cascade).',
+        'The alarm blocks every publishing connection on every node, not only those publishing to the bloated queue but all of them. One team’s slow consumer has frozen every producer in the company. Publishers do not receive errors; their <code>publish</code> calls simply hang, which is how the freeze propagates upstream into web request handlers. <a href="#ops">Chapter 6</a> plays the full cascade.',
       focus: ['alarm', 'blocked'],
       particles: [{ from: 'alarm', to: 'blocked', color: C.danger }],
     },
     {
       title: 'The only way out',
       prose:
-        'Deliveries continue — consumers are the exit. The backlog drains, memory falls below the watermark, the alarm clears, publishers unfreeze. The lesson is structural: <b>bulkheads before the alarm</b> — <code>max-length</code> and TTL on every queue (drop or dead-letter, your choice, but <em>bounded</em>), per-vhost memory limits per tenant — so one queue&apos;s worst day stays one queue&apos;s problem.',
+        'Deliveries continue, because consumers are the exit. The backlog drains, memory falls below the watermark, the alarm clears, and publishers unfreeze. The lesson is structural: put the bulkheads in place before the alarm. A <code>max-length</code> and a TTL on every queue, whether they drop or dead-letter, so that depth is bounded, and per-vhost memory limits per tenant, so that one queue’s worst day stays one queue’s problem.',
       focus: ['blocked', 'drain', 'ok'],
       particles: [{ from: 'drain', to: 'ok', color: C.store }],
     },
@@ -206,21 +206,21 @@ export const estateTrace: TraceSpec = {
     {
       title: 'Connections are infrastructure',
       prose:
-        'AMQP connections are stateful and expensive to open (handshake, auth, channel setup), so production apps hold <b>long-lived connections</b> with channels multiplexed on top, spread across nodes by a TCP load balancer. Connection <em>churn</em> — open, publish, close, repeat — is a top-three self-inflicted wound (Chapter 6 has the metric).',
+        'AMQP connections are stateful and expensive to open, with a handshake, authentication and channel setup, so production applications hold long-lived connections with channels multiplexed on top, spread across nodes by a TCP load balancer. Connection churn, that is, open, publish, close and repeat, is among the most common self-inflicted problems. <a href="#ops">Chapter 6</a> has the metric.',
       focus: ['apps', 'lb'],
       particles: [{ from: 'apps', to: 'lb', color: C.client, count: 2 }],
     },
     {
       title: 'Quorum queues — Raft, per queue',
       prose:
-        'Every important queue is a <b>quorum queue</b>: a Raft group with (typically) three replicas. A publish appends to the leader&apos;s log and confirms only after a <b>majority fsyncs</b> — real durability, priced at a network round-trip plus disk per message. (Classic mirrored queues, the old HA story, are deprecated for good reasons: their failure modes filled a decade of postmortems.)',
+        'Every important queue is a <em>quorum queue</em>: a Raft group with, typically, three replicas. A publish appends to the leader’s log and is confirmed only after a majority of replicas have fsynced it. This is real durability, priced at a network round trip plus a disk write per message. Classic mirrored queues, the older high-availability design, are deprecated for good reason: their failure modes filled a decade of postmortems.',
       focus: ['lb', 'n1'],
       particles: [{ from: 'lb', to: 'n1', color: C.queue, via: [{ x: 25, y: 27 }, { x: 25, y: 12.5 }] }],
     },
     {
       title: 'Leaders spread across nodes',
       prose:
-        'Each node leads some queues and follows others — the same leadership-balancing idea as Kafka&apos;s partition leaders. A three-node cluster with leaders well spread uses all three nodes&apos; cores; a cluster where one node leads everything is one node with two expensive spectators.',
+        'Each node leads some queues and follows others, which is the same leadership-balancing idea as Kafka’s partition leaders. A three-node cluster whose leaders are well spread uses the cores of all three nodes; a cluster in which one node leads everything is one node with two expensive spectators.',
       focus: ['n1', 'n2', 'n3'],
       particles: [
         { from: 'n1', to: 'n2', color: C.queue },
@@ -230,34 +230,34 @@ export const estateTrace: TraceSpec = {
     {
       title: 'The dead-letter estate',
       prose:
-        'Every real deployment grows a <b>parking-lot topology</b>: failures dead-letter into a retry queue with a TTL (the delay), which dead-letters back to the work queue (the retry), with a counter capping attempts before messages land in a human-triage <b>parking lot</b>. Retry-with-backoff, built entirely from TTL + DLX — the smart broker&apos;s primitives composing.',
+        'Every real deployment grows a <em>parking-lot topology</em>. Failures are dead-lettered into a retry queue with a TTL, which provides the delay; that queue dead-letters back to the work queue, which provides the retry; and a counter caps the number of attempts before a message lands in a parking lot for human triage. Retry with backoff, built entirely from TTL and dead-letter exchanges: the smart broker’s primitives composing.',
       focus: ['n2', 'dlq'],
       particles: [{ from: 'n2', to: 'dlq', color: C.machine }],
     },
     {
       title: 'vhosts — the blast-radius tool',
       prose:
-        'Tenants get <b>virtual hosts</b>: separate namespaces with their own permissions, quotas, and resource limits. After Chapter 2&apos;s trace you know why this matters: limits per vhost are how one team&apos;s runaway backlog is stopped <em>before</em> it reaches the node-wide watermark that freezes everyone.',
+        'Tenants get <em>virtual hosts</em>: separate namespaces with their own permissions, quotas and resource limits. After the second trace in <a href="#anatomy">Chapter 2</a> the reason this matters is clear: limits per vhost are how one team’s runaway backlog is stopped before it reaches the node-wide watermark that freezes everyone.',
       focus: ['vh'],
     },
     {
       title: 'Federation, not stretched clusters',
       prose:
-        'Across data centers, estates use <b>federation or shovels</b> — async links that republish messages remotely — rather than stretching one cluster over the WAN (Raft majorities across continents make every confirm pay intercontinental latency). Same lesson, third page in a row: <em>many bounded clusters, loosely coupled</em>.',
+        'Across data centres, an estate uses <em>federation</em> or shovels, which are asynchronous links that republish messages remotely, rather than stretching one cluster over the wide-area network, since a Raft majority spanning continents makes every confirm pay intercontinental latency. It is the same lesson for the third page running: many bounded clusters, loosely coupled.',
       focus: ['n2', 'fed'],
       particles: [{ from: 'n2', to: 'fed', color: C.edge }],
     },
     {
       title: 'Streams — the log moves in',
       prose:
-        'RabbitMQ&apos;s answer to &ldquo;we need replay&rdquo;: <b>streams</b> — append-only, non-destructive reads, offset-tracking consumers, millions of messages per second. It is, frankly, Kafka&apos;s abstraction living inside Rabbit — perfect for fan-in pipelines and audit feeds without running a second system.',
+        'RabbitMQ’s answer to “we need replay” is <em>streams</em>: append-only, with non-destructive reads, consumers that track their own offsets, and millions of messages per second. It is Kafka’s abstraction living inside RabbitMQ, and it suits fan-in pipelines and audit feeds without the cost of running a second system.',
       focus: ['stream', 'n2'],
       particles: [{ from: 'n2', to: 'stream', color: C.store }],
     },
     {
       title: 'The honest boundary',
       prose:
-        'And when the workload <em>is</em> a firehose — replayable, multi-subscriber, hundreds of MB/s, consumed by teams you&apos;ve never met — it&apos;s a log workload, and the log system wins (the Kafka page&apos;s opening argument). Mature estates run <b>both</b>: RabbitMQ for tasks, routing, and RPC; Kafka for the event backbone. The failure is not choosing one — it&apos;s using either as the other.',
+        'When the workload is a firehose, replayable, with many subscribers, at hundreds of megabytes per second, consumed by teams you have never met, it is a log workload, and the log system wins; that is the opening argument of the Kafka page. Mature estates run both: RabbitMQ for tasks, routing and RPC, Kafka for the event backbone. The mistake is not choosing one; it is using either as if it were the other.',
       focus: ['kafka', 'stream'],
       particles: [{ from: 'stream', to: 'kafka', color: C.machine }],
     },
